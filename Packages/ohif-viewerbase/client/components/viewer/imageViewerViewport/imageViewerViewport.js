@@ -108,8 +108,8 @@ function loadDisplaySetIntoViewport(data, templateData) {
 
     // NOTE: This uses the experimental WebGL renderer for Cornerstone!
     // If you have problems, replace it with this line instead:
-    // cornerstone.enable(element);
-    cornerstone.enable(element, options);
+    cornerstone.enable(element);
+    // cornerstone.enable(element, options);
 
     // Get the handler functions that will run when loading has finished or thrown
     // an error. These are used to show/hide loading / error text boxes on each viewport.
