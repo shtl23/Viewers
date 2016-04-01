@@ -132,7 +132,11 @@ function resultDataToStudyMetadata(studyInstanceUid, resultData) {
 
         // Retrieve the actual data over WADO-URI
         var server = getCurrentServer();
-        instanceSummary.wadouri = WADOProxy.convertURL(server.wadoUriRoot + '?requestType=WADO&studyUID=' + studyInstanceUid + '&seriesUID=' + seriesInstanceUid + '&objectUID=' + sopInstanceUid + '&contentType=application%2Fdicom', server.requestOptions);
+        if (server.imageRendering === 'wadouri') {
+            instanceSummary.wadouri = WADOProxy.convertURL(server.wadoUriRoot + '?requestType=WADO&studyUID=' + studyInstanceUid + '&seriesUID=' + seriesInstanceUid + '&objectUID=' + sopInstanceUid + "&contentType=application%2Fdicom", server.requestOptions);
+        } else {
+            instanceSummary.wadouri = WADOProxy.convertURL(server.wadoRsUriRoot + '/studies/' + studyInstanceUid + '/series/' + seriesInstanceUid + '/instances/' + sopInstanceUid, server.requestOptions);
+        }
 
         series.instances.push(instanceSummary);
     });

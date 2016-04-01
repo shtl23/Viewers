@@ -3,6 +3,7 @@
     "dimse": [{
       "name": "ORTHANC_DIMSE",
       "wadoUriRoot": "http://localhost:8042/wado",
+      "wadoRsUriRoot" : "http://localhost:8042/dicom-web",
       "requestOptions": {
         "auth": "orthanc:orthanc",
         "logRequests": true,
