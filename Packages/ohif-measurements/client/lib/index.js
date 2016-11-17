@@ -5,5 +5,7 @@ import './getTimepointName.js';
 import './hangingProtocolCustomizations.js';
 import './MeasurementHandlers.js';
 import './MeasurementManager.js';
+import './setOperations.js';
 import './syncMeasurementAndToolData.js';
 import './toggleLabelButton.js';
+import './setMeasurementToolEnabledState.js';
