@@ -74,6 +74,7 @@ Template.measurementTableHeaderRow.helpers({
     },
 
     anyUnmarkedLesionsLeft() {
+        console.log('anyUnmarkedLesionsLeft');
         // Skip New Lesions section
         const instance = Template.instance();
         if (!instance.data.measurements) {
@@ -81,8 +82,8 @@ Template.measurementTableHeaderRow.helpers({
         }
 
         const measurementType = instance.data.measurementType;
-        const config = OHIF.measurements.MeasurementApi.getConfiguration();
-        if (measurementType.id === config.newMeasurementTool.id) {
+        const newMeasurementType = instance.data.newMeasurementType;
+        if (newMeasurementType) {
             return;
         }
 
@@ -93,20 +94,12 @@ Template.measurementTableHeaderRow.helpers({
 
         const prior = timepointApi.prior();
         if (!prior) {
-            OHIF.measurements.setMeasurementToolEnabledState(measurementType.id, true);
             return true;
         }
 
         const measurementApi = instance.data.measurementApi;
         const remaining = OHIF.measurements.unmarkedRemaining(measurementType.id, measurementApi, timepointApi);
         const anyRemaining = remaining > 0;
-
-        if (!anyRemaining) {
-            OHIF.measurements.setMeasurementToolEnabledState(measurementType.id, false);
-        } else {
-            OHIF.measurements.setMeasurementToolEnabledState(measurementType.id, true);
-        }
-
         return anyRemaining
     }
 });

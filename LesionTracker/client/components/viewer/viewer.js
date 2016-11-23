@@ -131,8 +131,6 @@ Template.viewer.onCreated(() => {
             return;
         }
 
-
-
         // Find and activate the first measurement by Lesion Number
         // NOTE: This is inefficient, we should be using a hanging protocol
         // to hang the first measurement's imageId immediately, rather
@@ -180,7 +178,31 @@ Template.viewer.onCreated(() => {
         }
 
         firstMeasurementActivated = true;
-    })
+    });
+
+
+    // When viewport changes, check if we are able to mark any measurements for this timepoint
+    const config = OHIF.measurements.MeasurementApi.getConfiguration();
+    const newMeasurementToolId = config.newMeasurementTool.id;
+    const noNewMeasurementTools = config.measurementTools.filter(tool => tool.id !== newMeasurementToolId);
+    instance.autorun(() => {
+        Session.get('activeViewport');
+
+        if (!Session.get('TimepointsReady') ||
+            !Session.get('MeasurementsReady') ||
+            !Session.get('ViewerMainReady')) {
+            return;
+        }
+
+        const measurementApi = instance.data.measurementApi;
+        const timepointApi = instance.data.timepointApi;
+
+        noNewMeasurementTools.forEach(measurementType => {
+            const remaining = OHIF.measurements.unmarkedRemaining(measurementType.id, measurementApi, timepointApi);
+            const anyRemaining = remaining > 0;
+            OHIF.measurements.setMeasurementToolEnabledState(measurementType.id, !anyRemaining);
+        });
+    });
 });
 
 Template.viewer.helpers({

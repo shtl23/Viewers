@@ -8,6 +8,7 @@
                     {{#let collection=(groupByMeasurementNumber measurementType newMeasurementType)}}
                         {{>measurementTableHeaderRow
                             measurementType=measurementType
+                            newMeasurementType=newMeasurementType
                             measurements=collection
                             currentTimepointId=currentTimepointId
                             timepointApi=timepointApi
