@@ -39,7 +39,9 @@ class MeasurementManager {
         // so it should get a new number. The New Measurement number
         // should be the largest value in the identified set + 1.
         if (!differenceArray.length) {
-            const lastNumber = Math.max(...setAtTimepoint);
+            // Note: Keep the 0 here to prevent empty sets from
+            // producing a Maximum of -Infinity
+            const lastNumber = Math.max(...setAtTimepoint, 0);
             return lastNumber + 1;
         }
 
