@@ -23,10 +23,19 @@ const TargetUNSchema = new SimpleSchema([MeasurementSchemaTypes.CornerstoneToolM
         type: TargetUNHandlesSchema,
         label: 'Handles'
     },
+    measurementNumber: {
+        type: Number,
+        label: 'Measurement Number'
+    },
     location: {
         type: String,
         label: 'Location',
         optional: true
+    },
+    response: {
+        type: String,
+        label: 'Response',
+        optional: true // Optional because it is added after initial drawing, via a callback
     },
     description: {
         type: String,
@@ -40,17 +49,18 @@ const TargetUNSchema = new SimpleSchema([MeasurementSchemaTypes.CornerstoneToolM
     }
 }]);
 
-function displayFunction(data) {
-    return data.location;
-}
-
 export const targetUN = {
-    id: 'targetsUN',
-    memberOf: 'targets',
-    name: 'UN Targets',
+    id: 'targetUN',
+    name: 'UN Target',
+    toolGroup: 'targets',
     cornerstoneToolType: 'targetUN',
     schema: TargetUNSchema,
     options: {
-        includeInCaseProgress: true,
+        measurementTable: {
+            displayFunction: data => data.response
+        },
+        caseProgress: {
+            include: true
+        }
     }
 };

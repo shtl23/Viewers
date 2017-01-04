@@ -3,13 +3,6 @@ import { Blaze } from 'meteor/blaze';
 import { _ } from 'meteor/underscore';
 import { OHIF } from 'meteor/ohif:core';
 
-const toolMap = {
-    bidirectional: 'targets',
-    targetCR: 'targets',
-    targetUN: 'targets',
-    targetEX: 'targets'
-};
-
 OHIF.measurements.toggleLabelButton = options => {
     const removeButtonView = () => {
         if (!options.instance.buttonView) {
@@ -24,8 +17,7 @@ OHIF.measurements.toggleLabelButton = options => {
         removeButtonView();
     }
 
-    const tool = options.measurementTypeId || toolMap[options.toolType];
-    const toolCollection = options.measurementApi[tool];
+    const toolCollection = options.measurementApi.tools[options.toolType];
     const measurement = toolCollection.findOne(options.measurementId);
 
     const data = {

@@ -1,6 +1,5 @@
 import { Mongo } from 'meteor/mongo';
 import { _ } from 'meteor/underscore';
-
 import { OHIF } from 'meteor/ohif:core';
 
 let configuration = {};
@@ -14,17 +13,87 @@ class MeasurementApi {
         return configuration;
     }
 
-    constructor(currentTimepointId) {
-        if (currentTimepointId) {
-            this.currentTimepointId = currentTimepointId;
+    constructor(timepointApi) {
+        if (timepointApi) {
+            this.timepointApi = timepointApi;
         }
 
-        configuration.measurementTools.forEach(tool => {
-            const measurementTypeId = tool.id;
+        this.toolGroups = {};
+        this.tools = {};
 
-            this[measurementTypeId] = new Mongo.Collection(null);
-            this[measurementTypeId]._debugName = tool.name;
-            this[measurementTypeId].attachSchema(tool.schema);
+        configuration.measurementTools.forEach(toolGroup => {
+            const groupCollection = new Mongo.Collection(null);
+            groupCollection._debugName = toolGroup.name;
+            groupCollection.attachSchema(toolGroup.schema);
+            this.toolGroups[toolGroup.id] = groupCollection;
+
+            toolGroup.childTools.forEach(tool => {
+                const collection = new Mongo.Collection(null);
+                collection._debugName = tool.name;
+                collection.attachSchema(tool.schema);
+                this.tools[tool.id] = collection;
+
+                const addedHandler = measurement => {
+                    const timepoint = this.timepointApi.timepoints.findOne({
+                        studyInstanceUids: measurement.studyInstanceUid
+                    });
+                    const measurementNumber = groupCollection.find({
+                        studyInstanceUid: { $in: timepoint.studyInstanceUids }
+                    }).count() + 1;
+                    measurement.measurementNumber = measurementNumber;
+
+                    groupCollection.insert({
+                        toolId: tool.id,
+                        toolItemId: measurement._id,
+                        timepointId: timepoint.timepointId,
+                        studyInstanceUid: measurement.studyInstanceUid,
+                        createdAt: measurement.createdAt,
+                        measurementNumber
+                    });
+
+                    collection.update(measurement._id, {
+                        $set: {
+                            measurementNumber,
+                            timepointId: timepoint.timepointId
+                        }
+                    });
+                };
+
+                const removedHandler = measurement => {
+                    // Remove the record from the tools group collection too
+                    groupCollection.remove({
+                        toolItemId: measurement._id
+                    });
+
+                    // Update the measurement numbers only if it is last item
+                    const measurementNumber = measurement.measurementNumber;
+                    const timepoint = this.timepointApi.timepoints.findOne({
+                        timepointId: measurement.timepointId
+                    });
+                    const filter = {
+                        studyInstanceUid: { $in: timepoint.studyInstanceUids },
+                        measurementNumber
+                    };
+                    const remainingItems = groupCollection.find(filter).count();
+                    if (!remainingItems) {
+                        filter.measurementNumber = { $gte: measurementNumber };
+                        const operator = {
+                            $inc: { measurementNumber: -1 }
+                        };
+                        const options = { multi: true };
+                        groupCollection.update(filter, operator, options);
+                        toolGroup.childTools.forEach(childTool => {
+                            const collection = this.tools[childTool.id];
+                            collection.update(filter, operator, options);
+                        });
+                    }
+                };
+
+                collection.find().observe({
+                    added: addedHandler,
+                    removed: removedHandler
+                });
+            });
         });
     }
 
@@ -45,7 +114,7 @@ class MeasurementApi {
 
                     measurements.forEach(measurement => {
                         delete measurement._id;
-                        this[measurementTypeId].insert(measurement);
+                        this.tools[measurement.toolType].insert(measurement);
                     });
                 });
 
@@ -54,18 +123,24 @@ class MeasurementApi {
         });
     }
 
-    storeMeasurements(timepoints) {
+    storeMeasurements() {
         const storeFn = configuration.dataExchange.store;
         if (!_.isFunction(storeFn)) {
             return;
         }
 
         let measurementData = {};
-        configuration.measurementTools.forEach(tool => {
-            const measurementTypeId = tool.id;
-            measurementData[measurementTypeId] = this[measurementTypeId].find().fetch();
+        configuration.measurementTools.forEach(toolGroup => {
+            toolGroup.childTools.forEach(tool => {
+                if (!measurementData[toolGroup.id]) {
+                    measurementData[toolGroup.id] = [];
+                }
+
+                measurementData[toolGroup.id] = measurementData[toolGroup.id].concat(this.tools[tool.id].find().fetch());
+            });
         });
 
+        const timepoints = this.timepointApi.all();
         const timepointIds = timepoints.map(t => t.timepointId);
         const patientId = timepoints[0].patientId;
         const filter = {
@@ -75,6 +150,7 @@ class MeasurementApi {
             }
         };
 
+        OHIF.log.info('Saving Measurements for timepoints:', timepoints);
         storeFn(measurementData, filter).then(() => {
             OHIF.log.info('Measurement storage completed');
         });
@@ -88,161 +164,44 @@ class MeasurementApi {
     }
 
     syncMeasurementsAndToolData() {
-        configuration.measurementTools.forEach(tool => {
-            const measurements = this[tool.id].find().fetch();
-            measurements.forEach(measurement => {
-                OHIF.measurements.syncMeasurementAndToolData(measurement);
+        configuration.measurementTools.forEach(toolGroup => {
+            toolGroup.childTools.forEach(tool => {
+                const measurements = this.tools[tool.id].find().fetch();
+                measurements.forEach(measurement => {
+                    OHIF.measurements.syncMeasurementAndToolData(measurement);
+                });
             });
         });
-    }
-
-    // TODO: Create a better function to combine hasDataAtTimepoint and hasNoDataAtTimepoint
-    // because this doesn't seem very elegant...
-    hasDataAtTimepoint(collection, timepointId) {
-        // Retrieve all the data for this Measurement type (e.g. 'targets')
-        // which was recorded at baseline.
-        const dataAtTimepoint = collection.find({timepointId});
-
-        // Obtain a list of the Measurement Numbers from the
-        // measurements which have data at this timepoint
-        const numbers = dataAtTimepoint.map(m => m.measurementNumber);
-
-        // Retrieve all the data for this Measurement type which
-        // match the Measurement Numbers obtained above
-        const filter = {
-            measurementNumber: {
-                $in: numbers
-            }
-        };
-
-        return collection.find(filter).fetch();
-    }
-
-    hasNoDataAtTimepoint(collection, timepointId) {
-        // Retrieve all the data for this Measurement type (e.g. 'targets')
-        // which was recorded at baseline.
-        const dataAtTimepoint = collection.find({timepointId});
-
-        // Obtain a list of the Measurement Numbers from the
-        // measurements which have data at this timepoint
-        const numbers = dataAtTimepoint.map(m => m.measurementNumber);
-
-        // Retrieve all the data for this Measurement type which
-        // match the Measurement Numbers obtained above
-        const filter = {
-            measurementNumber: {
-                $nin: numbers
-            }
-        };
-        
-        return collection.find(filter).fetch();
     }
 
     sortMeasurements(baselineTimepointId) {
         const tools = configuration.measurementTools;
-        const hasDataAtTimepoint = this.hasDataAtTimepoint;
-        const hasNoDataAtTimepoint = this.hasNoDataAtTimepoint;
 
         const includedTools = tools.filter(tool => {
-            return (tool.options && tool.options.includeInCaseProgress === true);
+            return (tool.options && tool.options.caseProgress && tool.options.caseProgress.include);
         });
 
-        let overallMeasurementNumber = 1;
-        let specificToolMeasurementNumber = 1;
-
-
-        const updateMeasurementNumber = (collection, toolType) => {
-            return data => {
-                const filter = {
-                    measurementNumber: data.measurementNumber,
-                    toolType
-                }
-
-                collection.update(filter, {
-                    $set: {
-                        measurementNumber: specificToolMeasurementNumber
-                    }
-                });
-
-                // Increment the overall measurement number
-                specificToolMeasurementNumber += 1;
-            };
-        };
-
-        const updateMeasurementNumberOverall = (collection, toolType) => {
-            return data => {
-                const filter = {
-                    measurementNumber: data.measurementNumber,
-                    toolType
-                }
-
-                collection.update(filter, {
-                    $set: {
-                        measurementNumberOverall: overallMeasurementNumber
-                    }
-                });
-
-                // Increment the overall measurement number
-                overallMeasurementNumber += 1;
-            };
-        };
-
-        const summarizeMeasurement = (groupObject, toolType) => {
-            return key => {
-                return {
-                    measurementNumber: parseInt(key, 10),
-                    entries: groupObject[key],
-                    toolType
-                };
-            };
-        };
-
-        // First, update Measurement Number and the displayed Measurements
+        // Update Measurement the displayed Measurements
         includedTools.forEach(tool => {
-            const collection = this[tool.id];
-            const toolType = tool.cornerstoneToolType;
-            const measurements = collection.find({toolType}).fetch();
-            const groupObject = _.groupBy(measurements, m => m.measurementNumber);
-            const sortedByMeasurementNumber = Object.keys(groupObject).map(summarizeMeasurement(groupObject, toolType));
-            sortedByMeasurementNumber.forEach(updateMeasurementNumber(collection, toolType))
-
+            const collection = this.tools[tool.id];
+            const measurements = collection.find().fetch();
             measurements.forEach(measurement => {
                 OHIF.measurements.syncMeasurementAndToolData(measurement);
             });
-
-            // Reset specificToolMeasurementNumber
-            specificToolMeasurementNumber = 1;
-        });
-
-        // Next, handle the overall measurement number.
-        // First, handle data that has a measurement at baseline
-        includedTools.forEach(tool => {
-            const collection = this[tool.id];
-            const toolType = tool.cornerstoneToolType;
-            const measurements = hasDataAtTimepoint(collection, baselineTimepointId);
-            const groupObject = _.groupBy(measurements, m => m.measurementNumber);
-            const sortedByMeasurementNumber = Object.keys(groupObject).map(summarizeMeasurement(groupObject, toolType));
-            sortedByMeasurementNumber.forEach(updateMeasurementNumberOverall(collection, toolType))
-        });
-
-        // Next, handle New Measurements (i.e. no baseline data)
-        // Note that this cannot be combined with the loop above due to the incrementing of the overallMeasurementNumber
-        includedTools.forEach(tool => { 
-            const collection = this[tool.id];
-            const toolType = tool.cornerstoneToolType;
-            const measurements = hasNoDataAtTimepoint(collection, baselineTimepointId);
-            const groupObject = _.groupBy(measurements, m => m.measurementNumber);
-            const sortedByMeasurementNumber = Object.keys(groupObject).map(summarizeMeasurement(groupObject, toolType));
-            sortedByMeasurementNumber.forEach(updateMeasurementNumberOverall(collection, toolType));
         });
     }
 
     deleteMeasurements(measurementTypeId, filter) {
-        const collection = this[measurementTypeId];
+        const groupCollection = this.toolGroups[measurementTypeId];
 
         // Get the entries information before removing them
-        const entries = collection.find(filter).fetch();
-        collection.remove(filter);
+        const groupItems = groupCollection.find(filter).fetch();
+        const entries = [];
+        groupItems.forEach(groupItem => {
+            const collection = this.tools[groupItem.toolId];
+            entries.push(collection.findOne(groupItem.toolItemId));
+            collection.remove(groupItem.toolItemId);
+        });
 
         // Stop here if no entries were found
         if (!entries.length) {
@@ -269,39 +228,35 @@ class MeasurementApi {
             }
         });
 
-        // Update the measurement numbers for the remaining measurements
-        const updateFilter = _.clone(filter);
-        updateFilter.measurementNumber = {
-            $gt: measurementNumber
-        };
-        collection.update(updateFilter, {
-            $inc: {
-                measurementNumber: -1
-            }
-        }, {
-            multi: true
-        });
-
         // Synchronize the updated measurements with Cornerstone Tools
         // toolData to make sure the displayed measurements show 'Target X' correctly
-        const syncFilter = _.clone(updateFilter);
+        const syncFilter = _.clone(filter);
         syncFilter.measurementNumber = {
             $gt: measurementNumber - 1
         };
 
-        collection.find(syncFilter).forEach(measurement => {
-            OHIF.measurements.syncMeasurementAndToolData(measurement);
+        const toolTypes = _.uniq(entries.map(entry => entry.toolType));
+        toolTypes.forEach(toolType => {
+            const collection = this.tools[toolType];
+            collection.find(syncFilter).forEach(measurement => {
+                OHIF.measurements.syncMeasurementAndToolData(measurement);
+            });
         });
     }
 
     fetch(measurementTypeId, selector, options) {
-        if (!this[measurementTypeId]) {
+        if (!this.toolGroups[measurementTypeId]) {
             throw 'MeasurementApi: No Collection with the id: ' + measurementTypeId;
         }
 
         selector = selector || {};
         options = options || {};
-        return this[measurementTypeId].find(selector, options).fetch();
+        const result = [];
+        const items = this.toolGroups[measurementTypeId].find(selector, options).fetch();
+        items.forEach(item => {
+            result.push(this.tools[item.toolId].findOne(item.toolItemId));
+        });
+        return result;
     }
 }
 

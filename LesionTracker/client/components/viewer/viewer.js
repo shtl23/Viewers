@@ -1,5 +1,6 @@
 import { Template } from 'meteor/templating';
 import { Session } from 'meteor/session';
+import { ReactiveDict } from 'meteor/reactive-dict';
 import { OHIF } from 'meteor/ohif:core';
 import { _ } from 'meteor/underscore';
 
@@ -11,7 +12,6 @@ Template.viewer.onCreated(() => {
     ViewerData = window.ViewerData || ViewerData;
 
     const instance = Template.instance();
-    instance.subscribe('hangingprotocols');
 
     ValidationErrors.remove({});
 
@@ -39,7 +39,8 @@ Template.viewer.onCreated(() => {
         flipV,
         flipH,
         rotateL,
-        rotateR
+        rotateR,
+        linkStackScroll
     });
 
     if (ViewerData[contentId].loadedSeriesData) {
@@ -99,7 +100,7 @@ Template.viewer.onCreated(() => {
         Session.set('TimepointsReady', true);
 
         const timepointIds = timepoints.map(t => t.timepointId);
-        instance.data.measurementApi = new OHIF.measurements.MeasurementApi(instance.data.currentTimepointId);
+        instance.data.measurementApi = new OHIF.measurements.MeasurementApi(instance.data.timepointApi);
         const measurementsPromise = instance.data.measurementApi.retrieveMeasurements(patientId, timepointIds);
         measurementsPromise.then(() => {
             Session.set('MeasurementsReady', true);
@@ -131,18 +132,18 @@ Template.viewer.onCreated(() => {
             return;
         }
 
-
-
         // Find and activate the first measurement by Lesion Number
         // NOTE: This is inefficient, we should be using a hanging protocol
         // to hang the first measurement's imageId immediately, rather
         // than changing images after initial loading...
         const config = OHIF.measurements.MeasurementApi.getConfiguration();
-        const measurementTypeId = config.measurementTools[0].id;
+        const tools = config.measurementTools[0].childTools;
+        const firstTool = tools[Object.keys(tools)[0]];
+        const measurementTypeId = firstTool.id;
         const measurementApi = instance.data.measurementApi;
         const timepointApi = instance.data.timepointApi;
 
-        const collection = measurementApi[measurementTypeId];
+        const collection = measurementApi.tools[measurementTypeId];
         const sorting = {
             sort: {
                 measurementNumber: -1
@@ -154,7 +155,7 @@ Template.viewer.onCreated(() => {
         const current = timepointApi.current();
         if (!current) {
             return;
-        };
+        }
 
         let timepoints = [current];
         const prior = timepointApi.prior();
@@ -180,14 +181,14 @@ Template.viewer.onCreated(() => {
         }
 
         firstMeasurementActivated = true;
-    })
+    });
 });
 
 Template.viewer.helpers({
     dataSourcesReady() {
         // TODO: Find a better way to do this
         const ready = Session.get('TimepointsReady') && Session.get('MeasurementsReady');
-        console.log('dataSourcesReady? : ' + ready);
+        OHIF.log.info('dataSourcesReady? : ' + ready);
         return ready;
     }
 });
@@ -196,9 +197,11 @@ Template.viewer.events({
     'CornerstoneToolsMeasurementAdded .imageViewerViewport'(event, instance, eventData) {
         OHIF.measurements.MeasurementHandlers.onAdded(event, instance, eventData);
     },
+
     'CornerstoneToolsMeasurementModified .imageViewerViewport'(event, instance, eventData) {
         OHIF.measurements.MeasurementHandlers.onModified(event, instance, eventData);
     },
+
     'CornerstoneToolsMeasurementRemoved .imageViewerViewport'(event, instance, eventData) {
         OHIF.measurements.MeasurementHandlers.onRemoved(event, instance, eventData);
     }

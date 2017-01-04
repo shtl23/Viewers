@@ -7,7 +7,7 @@ import { FieldLesionLocation, FieldLesionLocationResponse } from 'meteor/ohif:le
 Template.dialogNonTargetMeasurement.onCreated(() => {
     const instance = Template.instance();
 
-    instance.measurementTypeId = 'nonTargets';
+    instance.measurementTypeId = 'nonTarget';
     const timepointApi = instance.data.timepointApi;
 
     instance.schema = new SimpleSchema({
@@ -18,8 +18,8 @@ Template.dialogNonTargetMeasurement.onCreated(() => {
     // Remove the measurement from the collection
     instance.removeMeasurement = () => {
         const measurementApi = instance.viewerData.measurementApi;
-        measurementApi.deleteMeasurements(instance.measurementTypeId, {
-            _id: instance.data.measurementData._id
+        measurementApi.deleteMeasurements('nonTargets', {
+            toolItemId: instance.data.measurementData._id
         });
 
         // Update the Overall Measurement Numbers for all Measurements
@@ -63,7 +63,7 @@ Template.dialogNonTargetMeasurement.onRendered(() => {
     const measurementApi = instance.viewerData.measurementApi;
     const timepointApi = instance.viewerData.timepointApi;
 
-    const collection = measurementApi[instance.measurementTypeId];
+    const collection = measurementApi.tools[instance.measurementTypeId];
 
     const measurementData = instance.data.measurementData;
 

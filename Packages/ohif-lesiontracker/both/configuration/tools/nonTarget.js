@@ -23,6 +23,10 @@ const NonTargetSchema = new SimpleSchema([MeasurementSchemaTypes.CornerstoneTool
         type: NonTargetHandlesSchema,
         label: 'Handles'
     },
+    measurementNumber: {
+        type: Number,
+        label: 'Measurement Number'
+    },
     response: {
         type: String,
         label: 'Response',
@@ -40,21 +44,18 @@ const NonTargetSchema = new SimpleSchema([MeasurementSchemaTypes.CornerstoneTool
     }
 }]);
 
-function displayFunction(data) {
-    return data.response;
-}
-
 export const nonTarget = {
-    id: 'nonTargets',
-    name: 'Non-Targets',
+    id: 'nonTarget',
+    name: 'Non-Target',
+    toolGroup: 'nonTargets',
     cornerstoneToolType: 'nonTarget',
     schema: NonTargetSchema,
-    displayFunction: displayFunction,
     options: {
-        showInMeasurementTable: true,
-        measurementTableOptions: {
-            displayFunction: displayFunction
+        measurementTable: {
+            displayFunction: data => data.response
         },
-        includeInCaseProgress: true,
+        caseProgress: {
+            include: true
+        }
     }
 };
