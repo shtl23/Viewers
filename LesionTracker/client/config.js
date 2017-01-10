@@ -1,3 +1,4 @@
+import { Meteor } from 'meteor/meteor';
 import { cornerstoneWADOImageLoader } from 'meteor/ohif:cornerstone';
 
 Meteor.startup(function() {
@@ -5,12 +6,12 @@ Meteor.startup(function() {
     const config = {
 	    maxWebWorkers: maxWebWorkers,	
     	startWebWorkersOnDemand: true,
-        webWorkerPath : '/packages/ohif_cornerstone/public/js/cornerstoneWADOImageLoaderWebWorker.js',
+        webWorkerPath : Meteor.absoluteUrl('packages/ohif_cornerstone/public/js/cornerstoneWADOImageLoaderWebWorker.js'),
         taskConfiguration: {
             'decodeTask' : {
 		        loadCodecsOnStartup : true,
 		        initializeCodecsOnStartup: false,
-                codecsPath: '/packages/ohif_cornerstone/public/js/cornerstoneWADOImageLoaderCodecs.js',
+                codecsPath: Meteor.absoluteUrl('packages/ohif_cornerstone/public/js/cornerstoneWADOImageLoaderCodecs.js'),
                 usePDFJS: false
             }
         }
