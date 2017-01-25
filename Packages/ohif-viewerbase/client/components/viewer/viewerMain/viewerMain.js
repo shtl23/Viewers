@@ -8,6 +8,7 @@ import { unloadHandlers } from '../../../lib/unloadHandlers';
 import { hotkeyUtils } from '../../../lib/hotkeyUtils';
 import { ResizeViewportManager } from '../../../lib/classes/ResizeViewportManager';
 import { LayoutManager } from '../../../lib/classes/LayoutManager';
+import { StudyPrefetcher } from '../../../lib/classes/StudyPrefetcher';
 
 Meteor.startup(() => {
     window.ResizeViewportManager = window.ResizeViewportManager || new ResizeViewportManager();
@@ -28,12 +29,15 @@ Template.viewerMain.onCreated(() => {
 
 Template.viewerMain.onRendered(() => {
     const instance = Template.instance();
+    const studyPrefetcher = StudyPrefetcher.getInstance();
 
     HP.ProtocolStore.onReady(() => {
         const { studies, currentTimepointId, measurementApi, timepointIds } = instance.data;
         const parentElement = instance.$('#layoutManagerTarget').get(0);
 
         OHIF.viewerbase.layoutManager = new LayoutManager(parentElement, studies);
+
+        studyPrefetcher.setStudies(studies);
 
         // Default actions for Associated Studies
         if(currentTimepointId) {
