@@ -1,21 +1,15 @@
 <template name="measurementTableView">
     <div class="measurementTableView scrollArea">
-        {{#let config=measurementConfiguration}}
-            {{#each toolGroup in config.measurementTools}}
-                {{#if shallDisplayGroup toolGroup.id}}
-                    {{#let collection=(groupByMeasurementNumber toolGroup.id)}}
-                        {{>measurementTableHeaderRow
-                            measurementType=toolGroup
-                            measurements=collection
-                            currentTimepointId=currentTimepointId
-                            timepointApi=timepointApi
-                            measurementApi=measurementApi}}
-
-                        {{#each entry in collection}}
-                            {{>measurementTableRow (clone this rowItem=entry)}}
-                        {{/each}}
-                    {{/let}}
-                {{/if}}
+        {{#let config=measurementConfiguration groups=measurementGroups.get}}
+            {{#each measurementGroup in groups}}
+                {{! #if hasMeasurements measurementGroup.toolGroup.id}}
+                    {{>measurementTableHeaderRow (clone this
+                        toolGroup=measurementGroup.toolGroup
+                        measurementRows=measurementGroup.measurementRows)}}
+                {{! /if}}
+                {{#each rowItem in measurementGroup.measurementRows}}
+                    {{>measurementTableRow (clone this rowItem=rowItem)}}
+                {{/each}}
             {{/each}}
 
             {{#if config.newMeasurementTool}}
@@ -39,5 +33,10 @@
                 {{/let}}
             {{/if}}
         {{/let}}
+        {{#if or (hasMeasurements 'targets') (hasMeasurements 'nonTargets')}}
+            <div class="report-area">
+                <div class="btn btn-sm js-pdf">Generate Report</div>
+            </div>
+        {{/if}}
     </div>
 </template>

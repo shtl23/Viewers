@@ -40,7 +40,7 @@ import { toolManager } from 'meteor/ohif:viewerbase';
 
         delete measurementData.isCreating;
 
-        OHIF.ui.showFormDialog('dialogNonTargetMeasurement', {
+        OHIF.ui.showDialog('dialogNonTargetMeasurement', {
             position: getPosition(eventData),
             title: 'Select Lesion Location',
             element: eventData.element,
@@ -53,7 +53,7 @@ import { toolManager } from 'meteor/ohif:viewerbase';
             return;
         }
 
-        OHIF.ui.showFormDialog('dialogNonTargetMeasurement', {
+        OHIF.ui.showDialog('dialogNonTargetMeasurement', {
             position: getPosition(eventData),
             title: 'Change Lesion Location',
             element: eventData.element,
@@ -253,7 +253,7 @@ import { toolManager } from 'meteor/ohif:viewerbase';
             // Draw the text
             if (data.measurementNumber) {
 
-                var boundingBox = cornerstoneTools.drawTextBox(context, 'Non-Target ' + data.measurementNumber, canvasTextLocation.x, canvasTextLocation.y, color);
+                var boundingBox = cornerstoneTools.drawTextBox(context, `Non-Target ${data.measurementNumber}`, canvasTextLocation.x, canvasTextLocation.y, color);
                 data.handles.textBox.boundingBox = boundingBox;
 
                 OHIF.cornerstone.repositionTextBox(eventData, data);

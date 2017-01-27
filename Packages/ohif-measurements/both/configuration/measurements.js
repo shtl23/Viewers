@@ -21,6 +21,7 @@ class MeasurementApi {
         this.toolGroups = {};
         this.tools = {};
         this.toolsGroupsMap = {};
+        this.changeObserver = new Tracker.Dependency();
 
         configuration.measurementTools.forEach(toolGroup => {
             const groupCollection = new Mongo.Collection(null);
@@ -36,13 +37,37 @@ class MeasurementApi {
                 this.toolsGroupsMap[tool.id] = toolGroup.id;
 
                 const addedHandler = measurement => {
+                    let measurementNumber;
+
                     // Get the measurement number
                     const timepoint = this.timepointApi.timepoints.findOne({
                         studyInstanceUids: measurement.studyInstanceUid
                     });
-                    const measurementNumber = groupCollection.find({
-                        studyInstanceUid: { $in: timepoint.studyInstanceUids }
-                    }).count() + 1;
+
+                    const emptyItem = groupCollection.findOne({
+                        toolId: { $eq: null },
+                        timepointId: timepoint.timepointId
+                    });
+
+                    if (emptyItem) {
+                        measurementNumber = emptyItem.measurementNumber;
+
+                        groupCollection.update({
+                            timepointId: timepoint.timepointId,
+                            measurementNumber
+                        }, {
+                            $set: {
+                                toolId: tool.id,
+                                toolItemId: measurement._id,
+                                createdAt: measurement.createdAt
+                            }
+                        });
+                    } else {
+                        measurementNumber = groupCollection.find({
+                            studyInstanceUid: { $in: timepoint.studyInstanceUids }
+                        }).count() + 1;
+                    }
+
                     measurement.measurementNumber = measurementNumber;
 
                     // Get the current location (if already defined)
@@ -59,16 +84,6 @@ class MeasurementApi {
                         }
                     }
 
-                    // Reflect the entry in the tool group collection
-                    groupCollection.insert({
-                        toolId: tool.id,
-                        toolItemId: measurement._id,
-                        timepointId: timepoint.timepointId,
-                        studyInstanceUid: measurement.studyInstanceUid,
-                        createdAt: measurement.createdAt,
-                        measurementNumber
-                    });
-
                     // Set the timepoint ID, measurement number and location
                     collection.update(measurement._id, {
                         $set: {
@@ -77,40 +92,86 @@ class MeasurementApi {
                             location
                         }
                     });
-                };
 
-                const removedHandler = measurement => {
-                    // Remove the record from the tools group collection too
-                    groupCollection.remove({
-                        toolItemId: measurement._id
-                    });
-
-                    // Update the measurement numbers only if it is last item
-                    const measurementNumber = measurement.measurementNumber;
-                    const timepoint = this.timepointApi.timepoints.findOne({
-                        timepointId: measurement.timepointId
-                    });
-                    const filter = {
-                        studyInstanceUid: { $in: timepoint.studyInstanceUids },
-                        measurementNumber
-                    };
-                    const remainingItems = groupCollection.find(filter).count();
-                    if (!remainingItems) {
-                        filter.measurementNumber = { $gte: measurementNumber };
-                        const operator = {
-                            $inc: { measurementNumber: -1 }
-                        };
-                        const options = { multi: true };
-                        groupCollection.update(filter, operator, options);
-                        toolGroup.childTools.forEach(childTool => {
-                            const collection = this.tools[childTool.id];
-                            collection.update(filter, operator, options);
+                    if (!emptyItem) {
+                        // Reflect the entry in the tool group collection
+                        groupCollection.insert({
+                            toolId: tool.id,
+                            toolItemId: measurement._id,
+                            timepointId: timepoint.timepointId,
+                            studyInstanceUid: measurement.studyInstanceUid,
+                            createdAt: measurement.createdAt,
+                            measurementNumber
                         });
                     }
+
+                    // Enable reactivity
+                    this.changeObserver.changed();
+                };
+
+                const changedHandler = () => {
+                    this.changeObserver.changed();
+                }
+
+                const removedHandler = measurement => {
+                    const measurementNumber = measurement.measurementNumber;
+
+                    groupCollection.update({
+                        toolItemId: measurement._id
+                    }, {
+                        $set: {
+                            toolId: null,
+                            toolItemId: null
+                        }
+                    });
+
+                    const nonEmptyItem = groupCollection.findOne({
+                        measurementNumber,
+                        toolId: { $not: null }
+                    });
+
+                    if (nonEmptyItem) {
+                        return;
+                    }
+
+                    const groupItems = groupCollection.find({ measurementNumber }).fetch();
+
+                    groupItems.forEach(groupItem => {
+                        // Remove the record from the tools group collection too
+                        groupCollection.remove({ _id: groupItem._id });
+
+                        // Update the measurement numbers only if it is last item
+                        const timepoint = this.timepointApi.timepoints.findOne({
+                            timepointId: groupItem.timepointId
+                        });
+
+                        const filter = {
+                            studyInstanceUid: { $in: timepoint.studyInstanceUids },
+                            measurementNumber
+                        };
+
+                        const remainingItems = groupCollection.find(filter).count();
+                        if (!remainingItems) {
+                            filter.measurementNumber = { $gte: measurementNumber };
+                            const operator = {
+                                $inc: { measurementNumber: -1 }
+                            };
+                            const options = { multi: true };
+                            groupCollection.update(filter, operator, options);
+                            toolGroup.childTools.forEach(childTool => {
+                                const collection = this.tools[childTool.id];
+                                collection.update(filter, operator, options);
+                            });
+                        }
+                    });
+
+                    // Enable reactivity
+                    this.changeObserver.changed();
                 };
 
                 collection.find().observe({
                     added: addedHandler,
+                    changed: changedHandler,
                     removed: removedHandler
                 });
             });
@@ -218,6 +279,10 @@ class MeasurementApi {
         const groupItems = groupCollection.find(filter).fetch();
         const entries = [];
         groupItems.forEach(groupItem => {
+            if (!groupItem.toolId) {
+                return;
+            }
+
             const collection = this.tools[groupItem.toolId];
             entries.push(collection.findOne(groupItem.toolItemId));
             collection.remove(groupItem.toolItemId);
@@ -251,6 +316,8 @@ class MeasurementApi {
         // Synchronize the updated measurements with Cornerstone Tools
         // toolData to make sure the displayed measurements show 'Target X' correctly
         const syncFilter = _.clone(filter);
+        delete syncFilter.timepointId;
+
         syncFilter.measurementNumber = {
             $gt: measurementNumber - 1
         };
@@ -264,17 +331,37 @@ class MeasurementApi {
         });
     }
 
-    fetch(measurementTypeId, selector, options) {
-        if (!this.toolGroups[measurementTypeId]) {
-            throw 'MeasurementApi: No Collection with the id: ' + measurementTypeId;
+    getMeasurementById(measurementId) {
+        let foundGroup;
+        _.find(this.toolGroups, toolGroup => {
+            foundGroup = toolGroup.findOne({ toolItemId: measurementId });
+            return !!foundGroup;
+        });
+
+        // Stop here if no group was found or if the record is a placeholder
+        if (!foundGroup || !foundGroup.toolId) {
+            return;
+        }
+
+        return this.tools[foundGroup.toolId].findOne(measurementId);
+    }
+
+    fetch(toolGroupId, selector, options) {
+        if (!this.toolGroups[toolGroupId]) {
+            throw 'MeasurementApi: No Collection with the id: ' + toolGroupId;
         }
 
         selector = selector || {};
         options = options || {};
         const result = [];
-        const items = this.toolGroups[measurementTypeId].find(selector, options).fetch();
+        const items = this.toolGroups[toolGroupId].find(selector, options).fetch();
         items.forEach(item => {
-            result.push(this.tools[item.toolId].findOne(item.toolItemId));
+            if (item.toolId) {
+                result.push(this.tools[item.toolId].findOne(item.toolItemId));
+            } else {
+                result.push({ measurementNumber: item.measurementNumber });
+            }
+
         });
         return result;
     }

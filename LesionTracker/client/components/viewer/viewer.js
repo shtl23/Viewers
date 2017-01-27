@@ -101,6 +101,8 @@ Template.viewer.onCreated(() => {
 
         const timepointIds = timepoints.map(t => t.timepointId);
         instance.data.measurementApi = new OHIF.measurements.MeasurementApi(instance.data.timepointApi);
+        instance.data.conformanceCriteria = new OHIF.measurements.ConformanceCriteria(instance.data.measurementApi, instance.data.timepointApi);
+
         const measurementsPromise = instance.data.measurementApi.retrieveMeasurements(patientId, timepointIds);
         measurementsPromise.then(() => {
             Session.set('MeasurementsReady', true);

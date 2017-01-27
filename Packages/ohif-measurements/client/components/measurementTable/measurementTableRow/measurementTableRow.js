@@ -1,32 +1,49 @@
-import { Meteor } from 'meteor/meteor';
 import { Template } from 'meteor/templating';
 import { OHIF } from 'meteor/ohif:core';
 import { _ } from 'meteor/underscore';
 
-function doneCallback(measurementData, deleteTool) {
-    // If a Lesion or Non-Target is removed via a dialog
-    // opened by the Lesion Table, we should clear the data for
-    // the specified Timepoint Cell
-    if (deleteTool === true) {
-        Meteor.call('removeMeasurement', measurementData.id, function(error, response) {
-            if (error) {
-                OHIF.log.warn(error);
-            }
-        });
-    }
-}
+Template.measurementTableRow.onCreated(() => {
+    const instance = Template.instance();
 
-// Delete a lesion if Ctrl+D or DELETE is pressed while a lesion is selected
-const keys = {
-    D: 68,
-    DELETE: 46
-};
+    instance.getWarningMessages = () => {
+        const measurementTypeId = instance.data.rowItem.measurementTypeId;
+        const measurementNumber = instance.data.rowItem.measurementNumber;
+        const groupedNonConformities = instance.data.conformanceCriteria.groupedNonConformities.get() || {};
+        const nonconformitiesByMeasurementTypeId = groupedNonConformities[measurementTypeId] || {};
+        const nonconformitiesByMeasurementNumbers = nonconformitiesByMeasurementTypeId.measurementNumbers || {};
+        const nonconformitiesByMeasurementNumber = nonconformitiesByMeasurementNumbers[measurementNumber] || {};
+
+        return nonconformitiesByMeasurementNumber.messages || [];
+    };
+});
+
+Template.measurementTableRow.helpers({
+    hasWarnings() {
+        return !!Template.instance().getWarningMessages().length;
+    }
+});
 
 Template.measurementTableRow.events({
+    'click .measurementRowSidebar .warning-icon'(event, instance) {
+        event.stopPropagation();
+        OHIF.ui.showDialog('measurementTableWarningsDialog', {
+            messages: instance.getWarningMessages(),
+            position: {
+                x: event.clientX,
+                y: event.clientY
+            }
+        });
+    },
+
     'click .measurementRowSidebar'(event, instance) {
         const $row = instance.$('.measurementTableRow');
+        const rowItem = instance.data.rowItem;
+        const timepoints = instance.data.timepoints.get();
+
         $row.closest('.measurementTableView').find('.measurementTableRow').not($row).removeClass('active');
         $row.toggleClass('active');
+
+        OHIF.measurements.jumpToRowItem(rowItem, timepoints);
     },
 
     'click .js-rename'(event, instance) {
@@ -51,10 +68,14 @@ Template.measurementTableRow.events({
     'click .js-delete'(event, instance) {
         const dialogSettings = {
             title: 'Delete measurements',
-            message: 'Are you sure you want to delete the measurement across all timepoints?'
+            message: 'Are you sure you want to delete the measurement across all timepoints?',
+            position: {
+                x: event.clientX,
+                y: event.clientY
+            }
         };
 
-        OHIF.ui.showFormDialog('dialogConfirm', dialogSettings).then(formData => {
+        OHIF.ui.showDialog('dialogConfirm', dialogSettings).then(formData => {
             const measurementTypeId = instance.data.rowItem.measurementTypeId;
             const measurement = instance.data.rowItem.entries[0];
             const measurementNumber = measurement.measurementNumber;
