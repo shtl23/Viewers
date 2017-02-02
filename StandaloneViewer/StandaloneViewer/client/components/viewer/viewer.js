@@ -1,13 +1,16 @@
 import { OHIF } from 'meteor/ohif:core';
+import 'meteor/ohif:viewerbase';
+import 'meteor/ohif:metadata';
 
 OHIF.viewer = OHIF.viewer || {};
+const viewportUtils = OHIF.viewerbase.viewportUtils;
 
 OHIF.viewer.functionList = {
-    toggleCineDialog: toggleCineDialog,
-    toggleCinePlay: toggleCinePlay,
-    clearTools: clearTools,
-    resetViewport: resetViewport,
-    invert: invert
+    toggleCineDialog: viewportUtils.toggleCineDialog,
+    toggleCinePlay: viewportUtils.toggleCinePlay,
+    clearTools: viewportUtils.clearTools,
+    resetViewport: viewportUtils.resetViewport,
+    invert: viewportUtils.invert
 };
 
 Session.set('activeContentId', 'standalone');
@@ -42,14 +45,16 @@ Template.viewer.onCreated(() => {
 
     Session.set('activeViewport', ViewerData[contentId].activeViewport || 0);
 
-    // Update the ViewerStudies collection with the loaded studies
-    ViewerStudies.remove({});
+    // @TypeSafeStudies
+    // Update the OHIF.viewer.Studies collection with the loaded studies
+    OHIF.viewer.Studies.removeAll();
 
     ViewerData[contentId].studyInstanceUids = [];
     instance.data.studies.forEach(study => {
         study.selected = true;
-        study.displaySets = createStacks(study);
-        ViewerStudies.insert(study);
+        const studyMetadata = new OHIF.metadata.StudyMetadata(study);
+        study.displaySets = OHIF.viewerbase.sortingManager.getDisplaySets(studyMetadata);
+        OHIF.viewer.Studies.insert(study);
         ViewerData[contentId].studyInstanceUids.push(study.studyInstanceUid);
     });
 

@@ -1,6 +1,10 @@
+import { Template } from 'meteor/templating';
+import { OHIF } from 'meteor/ohif:core';
+
 Template.studyBrowser.helpers({
     studies() {
-        return ViewerStudies.find({
+        // @TypeSafeStudies
+        return OHIF.viewer.Studies.findAllBy({
             selected: true
         });
     }

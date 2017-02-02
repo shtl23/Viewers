@@ -8,11 +8,13 @@ const OHIF = {
     log: {},
     ui: {},
     utils: {},
-    viewer: {}
+    viewer: {},
+    cornerstone: {}
 };
 
 // Expose the OHIF object to the client if it is on development mode
-if (Meteor.isDevelopment && Meteor.isClient) {
+// @TODO: remove this after applying namespace to this package
+if (Meteor.isClient) {
     window.OHIF = OHIF;
 }
 

@@ -1,4 +1,9 @@
+import { Meteor } from 'meteor/meteor';
+import { $ } from 'meteor/jquery';
+import { _ } from 'meteor/underscore';
+// OHIF Modules
 import { OHIF } from 'meteor/ohif:core';
+import 'meteor/ohif:viewerbase';
 
 // Define a global variable that will be used to refer to the Protocol Engine
 // It must be populated by HP.setEngine when the Viewer is initialized and a ProtocolEngine
@@ -74,7 +79,7 @@ HP.addCustomViewportSetting = function(settingId, settingName, options, callback
 Meteor.startup(function() {
     HP.addCustomViewportSetting('wlPreset', 'Window/Level Preset', Object.keys(OHIF.viewer.wlPresets), function(element, optionValue) {
         if (OHIF.viewer.wlPresets.hasOwnProperty(optionValue)) {
-            applyWLPreset(optionValue, element);
+            OHIF.viewerbase.wlPresets.applyWLPreset(optionValue, element);
         }
     });
 });
@@ -396,15 +401,16 @@ HP.ProtocolEngine = class ProtocolEngine {
                     return;
                 }
 
-                var alreadyLoaded = ViewerStudies.findOne({
+                // @TypeSafeStudies
+                var alreadyLoaded = OHIF.viewer.Studies.findBy({
                     studyInstanceUid: priorStudy.studyInstanceUid
                 });
 
                 if (!alreadyLoaded) {
                     getStudyMetadata(priorStudy.studyInstanceUid, study => {
                         study.abstractPriorValue = abstractPriorValue;
-                        study.displaySets = createStacks(study);
-                        ViewerStudies.insert(study);
+                        study.displaySets = OHIF.viewerbase.sortingManager.getDisplaySets(study);
+                        OHIF.viewer.Studies.insert(study);
                         this.studies.push(study);
                         this.matchImages(viewport);
                         this.updateViewports();
@@ -414,9 +420,8 @@ HP.ProtocolEngine = class ProtocolEngine {
             // TODO: Add relative Date / time
         });
 
-        var lastStudyIndex = this.studies.length - 1;
         this.studies.forEach(function(study) {
-            var studyMatchDetails = HP.match(study, studyMatchingRules);
+            const studyMatchDetails = HP.match(study, studyMatchingRules);
             if ((studyMatchingRules.length && !studyMatchDetails.score) ||
                 studyMatchDetails.score < highestStudyMatchingScore) {
                 return;
@@ -437,13 +442,13 @@ HP.ProtocolEngine = class ProtocolEngine {
                     // This tests to make sure there is actually image data in this instance
                     // TODO: Change this when we add PDF and MPEG support
                     // See https://ohiforg.atlassian.net/browse/LT-227
-                    if (!isImage(instance.sopClassUid) && !instance.rows) {
+                    if (!OHIF.viewerbase.isImage(instance.sopClassUid) && !instance.rows) {
                         return;
                     }
 
-                    var instanceMatchDetails = HP.match(instance, instanceMatchingRules);
+                    const instanceMatchDetails = HP.match(instance, instanceMatchingRules);
 
-                    var matchDetails = {
+                    const matchDetails = {
                         passed: [],
                         failed: []
                     };
@@ -456,9 +461,9 @@ HP.ProtocolEngine = class ProtocolEngine {
                     matchDetails.failed = matchDetails.failed.concat(seriesMatchDetails.details.failed);
                     matchDetails.failed = matchDetails.failed.concat(studyMatchDetails.details.failed);
 
-                    var totalMatchScore = instanceMatchDetails.score + seriesMatchDetails.score + studyMatchDetails.score;
+                    const totalMatchScore = instanceMatchDetails.score + seriesMatchDetails.score + studyMatchDetails.score;
 
-                    var imageDetails = {
+                    const imageDetails = {
                         studyInstanceUid: study.studyInstanceUid,
                         seriesInstanceUid: series.seriesInstanceUid,
                         sopInstanceUid: instance.sopInstanceUid,
@@ -473,16 +478,20 @@ HP.ProtocolEngine = class ProtocolEngine {
                         }
                     };
 
-                    // Find the displaySet
-                    const filter = {
-                        sopInstanceUid: instance.sopInstanceUid
+                    // Filter imageSet function: filter by InstanceUid
+                    const filterImageFn = (image) => {
+                        return image.getData().sopInstanceUid === instance.sopInstanceUid;
                     };
-                    const displaySet = _.filter(study.displaySets, ds => _.findWhere(ds.images, filter))[0];
+
+                    // Find the displaySet
+                    const displaySet = study.displaySets.find(ds => {
+                        return ds.images.filter(filterImageFn).length > 0;
+                    });
 
                     // If the instance was found, set the displaySet ID
                     if (displaySet) {
                         imageDetails.displaySetInstanceUid = displaySet.displaySetInstanceUid;
-                        imageDetails.imageId = getImageId(instance);
+                        imageDetails.imageId = OHIF.viewerbase.getImageId(instance);
                     }
 
                     if ((totalMatchScore > highestImageMatchingScore) || !bestMatch) {

@@ -1,7 +1,11 @@
+import { Blaze } from 'meteor/blaze';
+import { moment } from 'meteor/momentjs:moment';
+
 /**
  * A global Blaze UI helper to format a DICOM Time for display using the Moment library
  */
-UI.registerHelper('formatTM', function(context, options) {
+
+const formatTM = (context, options) => {
     if (!context) {
         return;
     }
@@ -21,4 +25,11 @@ UI.registerHelper('formatTM', function(context, options) {
     }
 
     return dateTime.format(format);
-});
+};
+
+// Check if global helper already exists to not override it
+if (!Blaze._getGlobalHelper('formatTM')) {
+    Blaze.registerHelper('formatTM', formatTM);
+}
+
+export { formatTM };

@@ -1,70 +1,103 @@
+import { ImageSet } from './classes/ImageSet';
+import { isImage } from './isImage';
+
+const isMultiFrame = instance => {
+    // NumberOfFrames (0028,0008)
+    return instance.getRawValue('x00280008') > 1;
+};
+
+const makeDisplaySet = (series, instances) => {
+    const instance = instances[0];
+
+    const imageSet = new ImageSet(instances);
+    const seriesData = series.getData();
+
+    // set appropriate attributes to image set...
+    imageSet.setAttributes({
+        displaySetInstanceUid: imageSet.uid, // create a local alias for the imageSet UID
+        seriesInstanceUid: seriesData.seriesInstanceUid,
+        seriesNumber: seriesData.seriesNumber,
+        seriesDescription: seriesData.seriesDescription,
+        numImageFrames: instances.length,
+        frameRate: instance.getRawValue('x00181063'),
+        modality: seriesData.modality,
+        isMultiFrame: isMultiFrame(instance)
+    });
+
+    // Sort the images in this series
+    imageSet.sortBy((a, b) => {
+        // Sort by InstanceNumber (0020,0013)
+        return (parseInt(a.getRawValue('x00200013', 0)) || 0) - (parseInt(b.getRawValue('x00200013', 0)) || 0);
+    });
+
+    // Include the first image instance number (after sorted)
+    imageSet.setAttribute('instanceNumber', imageSet.getImage(0).getRawValue('x00200013'));
+
+    return imageSet;
+};
+
+const isSingleImageModality = modality => {
+    return (modality === 'CR' ||
+            modality === 'MG' ||
+            modality === 'DX');
+};
+
 /**
- * Creates a set of series to be placed in the Study Browser
- * The series that appear in the Study Browser must represent
+ * Creates a set of series to be placed in the Study Metadata
+ * The series that appear in the Study Metadata must represent
  * imaging modalities.
  *
  * Furthermore, for drag/drop functionality,
  * it is easiest if the stack objects also contain information about
  * which study they are linked to.
  *
- * @param study The study instance to be used
- * @returns {Array} An array of series to be placed in the Study Browser
+ * @param study The study instance metadata to be used
+ * @returns {Array} An array of series to be placed in the Study Metadata
  */
-createStacks = function(study) {
+const createStacks = study => {
     // Define an empty array of display sets
-    var displaySets = [];
+    const displaySets = [];
 
-    if (!study || !study.seriesList) {
-    	return displaySets;
+    if (!study || !study.getSeriesCount()) {
+        return displaySets;
     }
 
-    study.seriesList.forEach(series => {
+    // Loop through the series (SeriesMetadata)
+    study.forEachSeries(series => {
         // If the series has no instances, skip it
-        if (!series.instances) {
+        if (!series.getInstanceCount()) {
             return;
         }
 
-        // Search through the instances of this series
+        // Search through the instances (InstanceMedatada object) of this series
         // Split Multi-frame instances and Single-image modalities
         // into their own specific display sets. Place the rest of each
         // series into another display set.
-        let stackableInstances = [];
-        series.instances.forEach(instance => {
-            // All imaging modalities must have a valid value for sopClassUid or rows
-            if (!isImage(instance.sopClassUid) && !instance.rows) {
+        const stackableInstances = [];
+        series.forEachInstance(instance => {
+            // All imaging modalities must have a valid value for sopClassUid (x00080016) or rows (x00280010)
+            if (!isImage(instance.getRawValue('x00080016')) && !instance.getRawValue('x00280010')) {
                 return;
             }
 
             let displaySet;
             if (isMultiFrame(instance)) {
                 displaySet = makeDisplaySet(series, [ instance ]);
-                displaySet.isClip = true;
-
-                // Include the study instance Uid for drag/drop purposes
-                displaySet.studyInstanceUid = study.studyInstanceUid;
-
-                // Override the default value of instances.length
-                displaySet.numImageFrames = instance.numFrames;
-
-                // Include the instance number
-                displaySet.instanceNumber = instance.instanceNumber;
-
-                // Include the acquisition datetime
-                displaySet.acquisitionDatetime = instance.acquisitionDatetime;
-
+                displaySet.setAttributes({
+                    isClip: true,
+                    studyInstanceUid: study.getStudyInstanceUID(), // Include the study instance Uid for drag/drop purposes
+                    numImageFrames: instance.getRawValue('x00280008'), // Override the default value of instances.length
+                    instanceNumber: instance.getRawValue('x00200013'), // Include the instance number
+                    acquisitionDatetime: instance.getRawValue('x0008002a') // Include the acquisition datetime
+                });
                 displaySets.push(displaySet);
             } else if (isSingleImageModality(instance.modality)) {
                 displaySet = makeDisplaySet(series, [ instance ]);
-
-                // Include the study instance Uid
-                displaySet.studyInstanceUid = study.studyInstanceUid;
-
-                // Include the instance number
-                displaySet.instanceNumber = instance.instanceNumber;
-
-                // Include the acquisition datetime
-                displaySet.acquisitionDatetime = instance.acquisitionDatetime;
-
+                displaySet.setAttributes({
+                    studyInstanceUid: study.getStudyInstanceUID(), // Include the study instance Uid
+                    instanceNumber: instance.getRawValue('x00200013'), // Include the instance number
+                    acquisitionDatetime: instance.getRawValue('x0008002a') // Include the acquisition datetime
+                });
                 displaySets.push(displaySet);
             } else {
                 stackableInstances.push(instance);
@@ -72,8 +105,8 @@ createStacks = function(study) {
         });
 
         if (stackableInstances.length) {
-            let displaySet = makeDisplaySet(series, stackableInstances);
-            displaySet.studyInstanceUid = study.studyInstanceUid;
+            const displaySet = makeDisplaySet(series, stackableInstances);
+            displaySet.setAttribute('studyInstanceUid', study.getStudyInstanceUID());
             displaySets.push(displaySet);
         }
     });
@@ -81,43 +114,8 @@ createStacks = function(study) {
     return displaySets;
 };
 
-function makeDisplaySet(series, instances) {
-    const instance = instances[0];
+/**
+ * Expose "createStacks"...
+ */
 
-    let displaySet = {
-        seriesInstanceUid: series.seriesInstanceUid,
-        seriesNumber: series.seriesNumber,
-        seriesDescription: series.seriesDescription,
-        numImageFrames: instances.length,
-        frameRate: instance.frameTime,
-        images: instances,
-        modality: series.modality,
-        isMultiFrame: isMultiFrame(instance)
-    };
-
-    // Sort the images in this series
-    displaySet.images.sort(function(a, b) {
-        if (a.instanceNumber && b.instanceNumber &&
-            a.instanceNumber !== b.instanceNumber) {
-            return a.instanceNumber - b.instanceNumber;
-        }
-    });
-
-    // Include the first image instance number
-    displaySet.instanceNumber = displaySet.images[0].instanceNumber;
-
-    // Create a unique ID for this stack so we can reference it
-    displaySet.displaySetInstanceUid = Random.id();
-
-    return displaySet;
-}
-
-function isSingleImageModality(modality) {
-    return (modality === 'CR' ||
-            modality === 'MG' ||
-            modality === 'DX');
-}
-
-function isMultiFrame(instance) {
-    return instance.numFrames > 1;
-}
+export { createStacks };

@@ -1,26 +1,33 @@
+import { $ } from 'meteor/jquery';
+
 /**
  * Updates the orientation labels on a Cornerstone-enabled Viewport element
  * when the viewport settings change (e.g. when a horizontal flip or a rotation occurs)
  *
  * @param element The DOM element of the Cornerstone viewport
+ * optional
+ * @param viewport The current viewport
  */
-updateOrientationMarkers = function(element) {
+export function updateOrientationMarkers(element, viewport) {
     // Get the current viewport settings
-    var viewport = cornerstone.getViewport(element);
+    if(!viewport) {
+        viewport = cornerstone.getViewport(element);
+    }
 
-    var enabledElement = cornerstone.getEnabledElement(element);
-    var imagePlane = cornerstoneTools.metaData.get('imagePlane', enabledElement.image.imageId);
+    // Updates the orientation labels on the viewport
+    const enabledElement = cornerstone.getEnabledElement(element);
+    const imagePlane = cornerstoneTools.metaData.get('imagePlane', enabledElement.image.imageId);
     
     if (!imagePlane || !imagePlane.rowCosines || !imagePlane.columnCosines) {
         return;
     }
 
-    var rowString = cornerstoneTools.orientation.getOrientationString(imagePlane.rowCosines);
-    var columnString = cornerstoneTools.orientation.getOrientationString(imagePlane.columnCosines);
-    var oppositeRowString = cornerstoneTools.orientation.invertOrientationString(rowString);
-    var oppositeColumnString = cornerstoneTools.orientation.invertOrientationString(columnString);
+    const rowString = cornerstoneTools.orientation.getOrientationString(imagePlane.rowCosines);
+    const columnString = cornerstoneTools.orientation.getOrientationString(imagePlane.columnCosines);
+    const oppositeRowString = cornerstoneTools.orientation.invertOrientationString(rowString);
+    const oppositeColumnString = cornerstoneTools.orientation.invertOrientationString(columnString);
 
-    var markers = {
+    const markers = {
         top: oppositeColumnString,
         left: oppositeRowString
     };
@@ -36,9 +43,9 @@ updateOrientationMarkers = function(element) {
     }
 
     // Get the viewport orientation marker DOM elements
-    var viewportOrientationMarkers = $(element).siblings('.viewportOrientationMarkers');
-    var topMarker = viewportOrientationMarkers.find('.topMid');
-    var leftMarker = viewportOrientationMarkers.find('.leftMid');
+    const viewportOrientationMarkers = $(element).siblings('.viewportOrientationMarkers');
+    const topMarker = viewportOrientationMarkers.find('.topMid');
+    const leftMarker = viewportOrientationMarkers.find('.leftMid');
 
     // Swap the labels accordingly if the viewport has been rotated
     // This could be done in a more complex way for intermediate rotation values (e.g. 45 degrees)
@@ -55,4 +62,4 @@ updateOrientationMarkers = function(element) {
         topMarker.text(markers.top);
         leftMarker.text(markers.left);
     }
-};
+}

@@ -1,5 +1,6 @@
 import { Template } from 'meteor/templating';
 import { Session } from 'meteor/session';
+import { Viewerbase } from 'meteor/ohif:viewerbase';
 
 Template.toolbarSection.helpers({
     // Returns true if the view shall be split in two viewports
@@ -8,11 +9,11 @@ Template.toolbarSection.helpers({
         Session.get('LayoutManagerUpdated');
 
         // Stops here if layout manager is not defined yet
-        if (!window.layoutManager) {
+        if (!Viewerbase.layoutManager) {
             return;
         }
 
-        return window.layoutManager.viewportData.length > 1;
+        return Viewerbase.layoutManager.viewportData.length > 1;
     },
 
     leftSidebarToggleButtonData() {
@@ -141,7 +142,7 @@ Template.toolbarSection.helpers({
             title: 'CINE',
             classes: 'imageViewerCommand',
             svgLink: '/packages/ohif_viewerbase/assets/icons.svg#icon-tools-cineplay-toggle',
-            disableFunction: hasMultipleFrames
+            disableFunction: Viewerbase.viewportUtils.hasMultipleFrames
         });
 
         const buttonData = [];
@@ -168,11 +169,11 @@ Template.toolbarSection.helpers({
         });
 
         buttonData.push({
-            id: 'link',
+            id: 'linkStackScroll',
             title: 'Link',
             classes: 'imageViewerCommand toolbarSectionButton nonAutoDisableState',
             svgLink: '/packages/ohif_viewerbase/assets/icons.svg#icon-tools-link',
-            disableFunction: isStackScrollLinkingDisabled
+            disableFunction: Viewerbase.viewportUtils.isStackScrollLinkingDisabled
         });
 
         buttonData.push({
@@ -216,7 +217,7 @@ Template.toolbarSection.events({
     'click #toggleTarget'(event, instance) {
         const $target = $(event.currentTarget);
         if (!$target.hasClass('active') && $target.hasClass('expanded')) {
-            toolManager.setActiveTool('bidirectional');
+            Viewerbase.toolManager.setActiveTool('bidirectional');
         }
     },
 
@@ -246,7 +247,7 @@ Template.toolbarSection.events({
 
 Template.toolbarSection.onRendered(function() {
     // Set disabled/enabled tool buttons that are set in toolManager
-    const states = toolManager.getToolDefaultStates();
+    const states = Viewerbase.toolManager.getToolDefaultStates();
     const disabledToolButtons = states.disabledToolButtons;
     const allToolbarButtons = $('.toolbarSection').find('.toolbarSectionButton:not(.nonAutoDisableState)');
 

@@ -1,12 +1,13 @@
 import { OHIF } from 'meteor/ohif:core';
 import { Session } from 'meteor/session';
 import { $ } from 'meteor/jquery';
+import { toolManager } from '../toolManager';
 
-class StackImagePositionOffsetSynchronizer {
+export class StackImagePositionOffsetSynchronizer {
   constructor() {
     this.active = false;
     this.syncedViewports = [];
-    this.synchronizer = new cornerstoneTools.Synchronizer("CornerstoneNewImage", cornerstoneTools.stackImagePositionOffsetSynchronizer)
+    this.synchronizer = new cornerstoneTools.Synchronizer('CornerstoneNewImage', cornerstoneTools.stackImagePositionOffsetSynchronizer)
   }
 
   static get ELEMENT_DISABLED_EVENT() {
@@ -181,18 +182,30 @@ class StackImagePositionOffsetSynchronizer {
   }
 
   getViewportImageNormal(element) {
+      if(!element) {
+        return;
+      }
+
       element = $(element).get(0);
 
       try {
         const enabledElement = cornerstone.getEnabledElement(element);
+
+        if(!enabledElement.image) {
+          return;
+        }
+
         const imageId = enabledElement.image.imageId;
         const imagePlane = cornerstoneTools.metaData.get('imagePlane', imageId);
 
-        return imagePlane.rowCosines.clone().cross(imagePlane.columnCosines);;
+        if(!imagePlane || !imagePlane.rowCosines || !imagePlane.columnCosines) {
+          return;
+        }
+
+        return imagePlane.rowCosines.clone().cross(imagePlane.columnCosines);
       } catch(error) {
-        console.log(error.message);
+        const errorMessage = error.message || error;
+        OHIF.log.info(`StackImagePositionOffsetSynchronizer getViewportImageNormal: ${errorMessage}`);
       }
   }
-}
-
-OHIF.viewer.stackImagePositionOffsetSynchronizer = new StackImagePositionOffsetSynchronizer();
+};

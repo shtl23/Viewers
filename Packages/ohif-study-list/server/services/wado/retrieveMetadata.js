@@ -108,8 +108,8 @@ function resultDataToStudyMetadata(server, studyInstanceUid, resultData) {
             sourceImageInstanceUid: getSourceImageInstanceUid(instance),
             laterality: DICOMWeb.getString(instance['00200062']),
             viewPosition: DICOMWeb.getString(instance['00185101']),
-            acquisitionDatetime: DICOMWeb.getString(instance['0008002A']),
-            numFrames: DICOMWeb.getNumber(instance['00280008']),
+            acquisitionDateTime: DICOMWeb.getString(instance['0008002A']),
+            numberOfFrames: DICOMWeb.getNumber(instance['00280008']),
             frameIncrementPointer: DICOMWeb.getAttribute(instance['00280009']),
             frameTime: DICOMWeb.getNumber(instance['00181063']),
             frameTimeVector: parseFloatArray(DICOMWeb.getString(instance['00181065'])),
@@ -118,6 +118,8 @@ function resultDataToStudyMetadata(server, studyInstanceUid, resultData) {
             derivationDescription: DICOMWeb.getString(instance['00282111']),
             lossyImageCompressionRatio: DICOMWeb.getString(instance['00282112']),
             lossyImageCompressionMethod: DICOMWeb.getString(instance['00282114']),
+            echoNumber: DICOMWeb.getString(instance['00180086']),
+            contrastBolusAgent: DICOMWeb.getString(instance['00180010'])
         };
 
         if (server.imageRendering === 'wadouri') {

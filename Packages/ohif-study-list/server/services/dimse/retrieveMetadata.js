@@ -118,8 +118,8 @@ function resultDataToStudyMetadata(studyInstanceUid, resultData) {
             sourceImageInstanceUid: getSourceImageInstanceUid(instance),
             laterality: instance[0x00200062],
             viewPosition: instance[0x00185101],
-            acquisitionDatetime: instance[0x0008002A],
-            numFrames: parseFloat(instance[0x00280008]),
+            acquisitionDateTime: instance[0x0008002A],
+            numberOfFrames: parseFloat(instance[0x00280008]),
             frameIncrementPointer: getValue(instance[0x00280009]),
             frameTime: parseFloat(instance[0x00181063]),
             frameTimeVector: parseFloatArray(instance[0x00181065]),
@@ -127,7 +127,9 @@ function resultDataToStudyMetadata(studyInstanceUid, resultData) {
             derivationDescription: instance[0x00282111],
             lossyImageCompressionRatio: instance[0x00282112],
             lossyImageCompressionMethod: instance[0x00282114],
-            spacingBetweenSlices: instance[0x00180088]
+            spacingBetweenSlices: instance[0x00180088],
+            echoNumber: instance[0x00180086],
+            contrastBolusAgent: instance[0x00180010]
         };
 
         // Retrieve the actual data over WADO-URI

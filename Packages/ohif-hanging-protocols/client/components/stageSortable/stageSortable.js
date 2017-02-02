@@ -1,3 +1,10 @@
+import { Template } from 'meteor/templating';
+import { Session } from 'meteor/session';
+import { Random } from 'meteor/random';
+
+import { OHIF } from 'meteor/ohif:core';
+import 'meteor/ohif:viewerbase';
+
 /**
  * Extend the Array prototype with a Swap function
  * so we can swap stages more easily

@@ -7,7 +7,7 @@ Template.displaySetNavigation.events({
             return;
         }
 
-        OHIF.viewer.moveDisplaySets(true);
+        OHIF.viewerbase.layoutManager.moveDisplaySets(true);
     },
 
     'click .js-prev'(event, instance) {
@@ -15,13 +15,18 @@ Template.displaySetNavigation.events({
             return;
         }
 
-        OHIF.viewer.moveDisplaySets(false);
+        OHIF.viewerbase.layoutManager.moveDisplaySets(false);
     }
 });
 
 Template.displaySetNavigation.helpers({
     disableButton(isNext) {
         Session.get('LayoutManagerUpdated');
-        return !OHIF.viewer.canMoveDisplaySets(isNext);
+
+        if (!OHIF.viewerbase.layoutManager) {
+            return;
+        }
+
+        return !OHIF.viewerbase.layoutManager.canMoveDisplaySets(isNext);
     }
 });

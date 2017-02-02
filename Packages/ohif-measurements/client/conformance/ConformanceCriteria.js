@@ -1,7 +1,9 @@
 import { ReactiveVar } from 'meteor/reactive-var';
 import { Tracker } from 'meteor/tracker';
+import { Session } from 'meteor/session';
 import { _ } from 'meteor/underscore';
 import { OHIF } from 'meteor/ohif:core';
+import 'meteor/ohif:viewerbase';
 import { CriteriaEvaluator } from './CriteriaEvaluator';
 import * as evaluations from './evaluations';
 
@@ -15,6 +17,7 @@ class ConformanceCriteria {
         this.maxTargets = new ReactiveVar(null);
 
         const validate = _.debounce(trialCriteriaType => {
+            if (Session.get('MeasurementsReady')) return;
             this.validate(trialCriteriaType);
         }, 300);
 
@@ -130,7 +133,7 @@ class ConformanceCriteria {
 
             measurements.forEach(measurement => {
                 const { studyInstanceUid, imageId } = measurement;
-                const metadata = this.getImageMetadata(studyInstanceUid, imageId);
+                const metadata = this.getImageInstanceMetadata(studyInstanceUid, imageId);
                 const timepointId = measurement.timepointId;
                 const timepoint = this.timepointApi.timepoints.findOne({ timepointId });
 
@@ -152,30 +155,16 @@ class ConformanceCriteria {
         return data;
     }
 
-    getImageMetadata(studyInstanceUid, imageId) {
-        const study = ViewerStudies.findOne({ studyInstanceUid });
+    getImageInstanceMetadata(studyInstanceUid, imageId) {
+        const study = OHIF.viewer.Studies.findBy({ studyInstanceUid });
 
         // Stop here if the study was not found
         if (!study) {
             return;
         }
 
-        let foundImage;
-        _.each(study.displaySets, displaySet => {
-            if (foundImage) {
-                return;
-            }
-
-            _.each(displaySet.images, image => {
-                if (foundImage) {
-                    return;
-                } else if (getImageId(image) === imageId) {
-                    foundImage = image;
-                }
-            });
-        });
-
-        return foundImage;
+        const metadata = OHIF.cornerstone.metadataProvider.getMetadata(imageId);
+        return metadata ? metadata.instance : undefined;
     }
 
 }

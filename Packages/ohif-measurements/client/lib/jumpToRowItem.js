@@ -1,16 +1,17 @@
 import { $ } from 'meteor/jquery';
 import { OHIF } from 'meteor/ohif:core';
+import 'meteor/ohif:viewerbase';
 
 function findAndRenderDisplaySet(displaySets, viewportIndex, studyInstanceUid, seriesInstanceUid, sopInstanceUid, renderedCallback) {
         // Find the proper stack to display
     const stacksFromSeries = displaySets.filter(stack => stack.seriesInstanceUid === seriesInstanceUid);
     const stack = stacksFromSeries.find(stack => {
-        const imageIndex = stack.images.findIndex(image => image.sopInstanceUid === sopInstanceUid);
-        return imageIndex > -1;    
+        const imageIndex = stack.images.findIndex(image => image.getSOPInstanceUID() === sopInstanceUid);
+        return imageIndex > -1;
     });
 
     // TODO: make this work for multi-frame instances
-    const specificImageIndex = stack.images.findIndex(image => image.sopInstanceUid === sopInstanceUid);
+    const specificImageIndex = stack.images.findIndex(image => image.getSOPInstanceUID() === sopInstanceUid);
 
     const displaySetData = {
         studyInstanceUid: studyInstanceUid,
@@ -22,15 +23,17 @@ function findAndRenderDisplaySet(displaySets, viewportIndex, studyInstanceUid, s
 
     // Add a renderedCallback to activate the measurements once it's 
     if (renderedCallback) {
-        displaySetData.renderedCallback = renderedCallback;    
+        displaySetData.renderedCallback = renderedCallback;
     }
 
-    window.layoutManager.rerenderViewportWithNewDisplaySet(viewportIndex, displaySetData);
+    OHIF.viewerbase.layoutManager.rerenderViewportWithNewDisplaySet(viewportIndex, displaySetData);
 }
 
 function renderIntoViewport(viewportIndex, studyInstanceUid, seriesInstanceUid, sopInstanceUid, renderedCallback) {
+
+    // @TypeSafeStudies
     // First, check if we already have this study loaded
-    const alreadyLoadedStudy = ViewerStudies.findOne({studyInstanceUid});
+    const alreadyLoadedStudy = OHIF.viewer.Studies.findBy({ studyInstanceUid });
 
     if (alreadyLoadedStudy) {
         // If the Study is already loaded, find the display set and render it
@@ -41,16 +44,18 @@ function renderIntoViewport(viewportIndex, studyInstanceUid, seriesInstanceUid, 
         const $viewports = $('.imageViewerViewport');
         const element = $viewports.get(viewportIndex);
         const startLoadingHandler = cornerstoneTools.loadHandlerManager.getStartLoadHandler();
-        startLoadingHandler(element)
+        startLoadingHandler(element);
         getStudyMetadata(studyInstanceUid, loadedStudy => {
             loadedStudy.displaySets = createStacks(loadedStudy);
             OHIF.log.warn('renderIntoViewport');
 
             // Double check to make sure this study wasn't already inserted
-            // into ViewerStudies, so we don't cause duplicate entry errors
-            const loaded = ViewerStudies.findOne(loadedStudy._id);
+            // into OHIF.viewer.Studies, so we don't cause duplicate entry errors
+            const loaded = OHIF.viewer.Studies.findBy({
+                studyInstanceUid: loadedStudy.studyInstanceUid
+            });
             if (!loaded) {
-                ViewerStudies.insert(loadedStudy);    
+                OHIF.viewer.Studies.insert(loadedStudy);
             }
 
             findAndRenderDisplaySet(loadedStudy.displaySets, viewportIndex, studyInstanceUid, seriesInstanceUid, sopInstanceUid, renderedCallback)

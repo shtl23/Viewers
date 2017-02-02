@@ -1,19 +1,44 @@
-import { OHIF } from 'meteor/ohif:core';
+import { Session } from 'meteor/session';
+import { $ } from 'meteor/jquery';
+import { Random } from 'meteor/random';
 
-setActiveViewport = element => {
+import { OHIF } from 'meteor/ohif:core';
+import { enablePrefetchOnElement } from './enablePrefetchOnElement';
+import { displayReferenceLines } from './displayReferenceLines';
+
+/**
+ * Sets a viewport element active
+ * @param  {node} element DOM element to be activated
+ */
+export function setActiveViewport(element) {
     if (!element) {
+        OHIF.log.info('setActiveViewport element does not exist');
         return;
     }
 
-    const viewportIndex = $('.imageViewerViewport').index(element);
+    const viewerports = $('.imageViewerViewport');
+    const viewportIndex = viewerports.index(element);
     const jQueryElement = $(element);
 
-    // When an ActivateViewport event is fired, update the Meteor Session
+    OHIF.log.info(`setActiveViewport setting viewport index: ${viewportIndex}`);
+
+    // If viewport is not active
+    if(!jQueryElement.parents('.viewportContainer').hasClass('active')) {
+        // Trigger an event for compatibility with other systems
+        jQueryElement.trigger('OHIFBeforeActivateViewport');
+    }
+
+    // When an OHIFActivateViewport event is fired, update the Meteor Session
     // with the viewport index that it was fired from.
     Session.set('activeViewport', viewportIndex);
 
+    const randomId = Random.id();
+
+    // Update the Session variable to inform that a viewport is active
+    Session.set('viewportActivated', randomId);
+
     // Update the Session variable to the UI re-renders
-    Session.set('LayoutManagerUpdated', Random.id());
+    Session.set('LayoutManagerUpdated', randomId);
 
     // Add the 'active' class to the parent container to highlight the active viewport
     $('#imageViewerViewports .viewportContainer').removeClass('active');
@@ -28,11 +53,19 @@ setActiveViewport = element => {
         const domElement = jQueryElement.get(0);
         enablePrefetchOnElement(domElement);
         displayReferenceLines(domElement);
-        OHIF.viewer.stackImagePositionOffsetSynchronizer.update();
+        // @TODO Add this to OHIFAfterActivateViewport handler...
+        if (OHIF.viewer.stackImagePositionOffsetSynchronizer) {
+            OHIF.viewer.stackImagePositionOffsetSynchronizer.update();
+        }
     }
 
     // Set the div to focused, so keypress events are handled
     //$(element).focus();
     //.focus() event breaks in FF&IE
     jQueryElement.triggerHandler('focus');
-};
+
+    // Trigger OHIFAfterActivateViewport event on activated instance
+    // for compatibility with other systems
+    jQueryElement.trigger('OHIFAfterActivateViewport');
+
+}

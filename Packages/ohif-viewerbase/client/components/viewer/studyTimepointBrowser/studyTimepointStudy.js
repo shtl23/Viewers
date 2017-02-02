@@ -3,6 +3,8 @@ import { Template } from 'meteor/templating';
 import { ReactiveVar } from 'meteor/reactive-var';
 import { _ } from 'meteor/underscore';
 import { $ } from 'meteor/jquery';
+import { OHIF } from 'meteor/ohif:core';
+import { sortingManager } from '../../../lib/sortingManager';
 
 Template.studyTimepointStudy.onCreated(() => {
     const instance = Template.instance();
@@ -14,11 +16,6 @@ Template.studyTimepointStudy.onCreated(() => {
         const studyInstanceUid = instance.data.study.studyInstanceUid;
         const selector = `.studyTimepointStudy[data-uid='${studyInstanceUid}']`;
         return isGlobal ? $(selector) : instance.$browser.find(selector);
-    };
-
-    // Set all the studies with the same uid to loading state
-    instance.setLoading = () => {
-
     };
 
     // Set the current study as selected in the studies list
@@ -101,23 +98,22 @@ Template.studyTimepointStudy.events({
 
         const isQuickSwitch = !_.isUndefined(instance.data.viewportIndex);
 
+        // @TypeSafeStudies
         // Check if the study already has series data,
         // and if not, retrieve it.
         if (!studyData.seriesList) {
-            const alreadyLoaded = ViewerStudies.findOne({ _id });
+            const alreadyLoaded = OHIF.viewer.Studies.findBy({ studyInstanceUid });
 
             if (!alreadyLoaded) {
                 const $studies = instance.getStudyElement(true);
                 $studies.trigger('loadStarted');
                 getStudyMetadata(studyInstanceUid, study => {
-                    study.displaySets = createStacks(study);
+                    study.displaySets = sortingManager.getDisplaySets(study);
                     instance.data.study = study;
-                    ViewerStudies.insert(study, () => {
-                        // To make sure studies are rendered in the DOM
-                        // use minimongo insert callback
-                        $studies.trigger('loadEnded');
-                        instance.select(isQuickSwitch);
-                    });
+                    OHIF.viewer.Studies.insert(study);
+                    // make sure studies are rendered in the DOM
+                    $studies.trigger('loadEnded');
+                    instance.select(isQuickSwitch);
                 });
             } else {
                 studyData.seriesList = alreadyLoaded.seriesList;
@@ -130,9 +126,10 @@ Template.studyTimepointStudy.events({
 
 Template.studyTimepointStudy.helpers({
     isLoading() {
+        // @TypeSafeStudies
         const instance = Template.instance();
         const studyData = instance.data.study;
-        const alreadyLoaded = ViewerStudies.findOne({ _id: studyData._id });
+        const alreadyLoaded = OHIF.viewer.Studies.findBy({ studyInstanceUid: studyData.studyInstanceUid });
         return instance.loading.get() && !alreadyLoaded;
     },
     modalities() {

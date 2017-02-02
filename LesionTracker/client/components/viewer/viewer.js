@@ -1,14 +1,34 @@
+import { Meteor } from 'meteor/meteor';
 import { Template } from 'meteor/templating';
 import { Session } from 'meteor/session';
 import { ReactiveDict } from 'meteor/reactive-dict';
-import { OHIF } from 'meteor/ohif:core';
 import { _ } from 'meteor/underscore';
+import { $ } from 'meteor/jquery';
 
-Session.set('ViewerMainReady', false);
-Session.set('TimepointsReady', false);
-Session.set('MeasurementsReady', false);
+import { OHIF } from 'meteor/ohif:core';
+import 'meteor/ohif:cornerstone';
+import 'meteor/ohif:viewerbase';
+import 'meteor/ohif:metadata';
+
+Meteor.startup(() => {
+    Session.set('ViewerMainReady', false);
+    Session.set('TimepointsReady', false);
+    Session.set('MeasurementsReady', false);
+
+    OHIF.viewer.stackImagePositionOffsetSynchronizer = new OHIF.viewerbase.StackImagePositionOffsetSynchronizer();
+
+    // Create the synchronizer used to update reference lines
+    OHIF.viewer.updateImageSynchronizer = new cornerstoneTools.Synchronizer('CornerstoneNewImage', cornerstoneTools.updateImageSynchronizer);
+
+    OHIF.viewer.metadataProvider = OHIF.cornerstone.metadataProvider;
+
+    // Metadata configuration
+    const metadataProvider = OHIF.viewer.metadataProvider;
+    cornerstoneTools.metaData.addProvider(metadataProvider.provider.bind(metadataProvider));
+});
 
 Template.viewer.onCreated(() => {
+    const toolManager = OHIF.viewerbase.toolManager;
     ViewerData = window.ViewerData || ViewerData;
 
     const instance = Template.instance();
@@ -20,6 +40,7 @@ Template.viewer.onCreated(() => {
     instance.data.state.set('rightSidebar', Session.get('rightSidebar'));
 
     const contentId = instance.data.contentId;
+    const viewportUtils = OHIF.viewerbase.viewportUtils;
 
     OHIF.viewer.functionList = $.extend(OHIF.viewer.functionList, {
         toggleLesionTrackerTools: OHIF.lesiontracker.toggleLesionTrackerTools,
@@ -32,15 +53,15 @@ Template.viewer.onCreated(() => {
             toolManager.setActiveTool('nonTarget');
         },
         // Viewport functions
-        toggleCineDialog,
-        clearTools,
-        resetViewport,
-        invert,
-        flipV,
-        flipH,
-        rotateL,
-        rotateR,
-        link
+        toggleCineDialog: viewportUtils.toggleCineDialog,
+        clearTools: viewportUtils.clearTools,
+        resetViewport: viewportUtils.resetViewport,
+        invert: viewportUtils.invert,
+        flipV: viewportUtils.flipV,
+        flipH: viewportUtils.flipH,
+        rotateL: viewportUtils.rotateL,
+        rotateR: viewportUtils.rotateR,
+        linkStackScroll: viewportUtils.linkStackScroll
     });
 
     if (ViewerData[contentId].loadedSeriesData) {
@@ -59,13 +80,15 @@ Template.viewer.onCreated(() => {
     // Set lesion tool buttons as disabled if pixel spacing is not available for active element
     instance.autorun(OHIF.lesiontracker.pixelSpacingAutorunCheck);
 
-    // Update the ViewerStudies collection with the loaded studies
-    ViewerStudies.remove({});
+    // @TypeSafeStudies
+    // Update the OHIF.viewer.Studies collection with the loaded studies
+    OHIF.viewer.Studies.removeAll();
 
     instance.data.studies.forEach(study => {
         study.selected = true;
-        study.displaySets = createStacks(study);
-        ViewerStudies.insert(study);
+        const studyMetadata = new OHIF.metadata.StudyMetadata(study);
+        study.displaySets = OHIF.viewerbase.sortingManager.getDisplaySets(studyMetadata);
+        OHIF.viewer.Studies.insert(study);
     });
 
     instance.data.timepointApi = new OHIF.measurements.TimepointApi(instance.data.currentTimepointId);

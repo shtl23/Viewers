@@ -1,5 +1,17 @@
+import { Meteor } from 'meteor/meteor';
+import { Template } from 'meteor/templating';
+import { Session } from 'meteor/session';
 import { OHIF } from 'meteor/ohif:core';
-import { unloadHandlers } from '../../../lib/unloadHandlers.js';
+// Local Modules
+import { toolManager } from '../../../lib/toolManager';
+import { unloadHandlers } from '../../../lib/unloadHandlers';
+import { hotkeyUtils } from '../../../lib/hotkeyUtils';
+import { ResizeViewportManager } from '../../../lib/classes/ResizeViewportManager';
+import { LayoutManager } from '../../../lib/classes/LayoutManager';
+
+Meteor.startup(() => {
+    window.ResizeViewportManager = window.ResizeViewportManager || new ResizeViewportManager();
+});
 
 Template.viewerMain.onCreated(() => {
     // Attach the Window resize listener
@@ -8,13 +20,10 @@ Template.viewerMain.onCreated(() => {
     // and change it to jQuery._data(window, 'events')['resize']. 
     // Otherwise this function will be probably overrided.
     // See cineDialog instance.setResizeHandler function
-    window.addEventListener('resize', handleResize);
+    window.addEventListener('resize', window.ResizeViewportManager.getResizeHandler());
 
     // Add beforeUnload event handler to check for unsaved changes
     window.addEventListener('beforeunload', unloadHandlers.beforeUnload);
-
-    // Create the synchronizer used to update reference lines
-    OHIF.viewer.updateImageSynchronizer = new cornerstoneTools.Synchronizer('CornerstoneNewImage', cornerstoneTools.updateImageSynchronizer);
 });
 
 Template.viewerMain.onRendered(() => {
@@ -23,7 +32,8 @@ Template.viewerMain.onRendered(() => {
     HP.ProtocolStore.onReady(() => {
         const { studies, currentTimepointId, measurementApi, timepointIds } = instance.data;
         const parentElement = instance.$('#layoutManagerTarget').get(0);
-        window.layoutManager = new LayoutManager(parentElement, studies);
+
+        OHIF.viewerbase.layoutManager = new LayoutManager(parentElement, studies);
 
         // Default actions for Associated Studies
         if(currentTimepointId) {
@@ -73,18 +83,27 @@ Template.viewerMain.onRendered(() => {
             }
 
             // Toggle Measurement Table 
-            instance.data.state.set('rightSidebar', 'measurements');
+            if(instance.data.state) {
+                instance.data.state.set('rightSidebar', 'measurements');
+            }
         }
         // Hide as default for single study
         else {
-            instance.data.state.set('rightSidebar', null);
+            if(instance.data.state) {
+                instance.data.state.set('rightSidebar', null);
+            }
         }
 
-        ProtocolEngine = new HP.ProtocolEngine(window.layoutManager, studies);
-        HP.setEngine(ProtocolEngine);
+        if (OHIF.viewer.isProtocolEngineDisabled === true) {
+            OHIF.viewerbase.layoutManager.updateViewports();
+        } else {
+            // updateViewports method from current layout manager will be automatically called by the protocol engine;
+            ProtocolEngine = new HP.ProtocolEngine(OHIF.viewerbase.layoutManager, studies);
+            HP.setEngine(ProtocolEngine);
+        }
 
         // Enable hotkeys
-        enableHotkeys();
+        hotkeyUtils.enableHotkeys();
 
         Session.set('ViewerMainReady', Random.id());
     });
@@ -94,7 +113,7 @@ Template.viewerMain.onDestroyed(() => {
     OHIF.log.info('viewerMain onDestroyed');
 
     // Remove the Window resize listener
-    window.removeEventListener('resize', handleResize);
+    window.removeEventListener('resize', window.ResizeViewportManager.getResizeHandler());
 
     // Remove beforeUnload event handler...
     window.removeEventListener('beforeunload', unloadHandlers.beforeUnload);
@@ -102,6 +121,6 @@ Template.viewerMain.onDestroyed(() => {
     // Destroy the synchronizer used to update reference lines
     OHIF.viewer.updateImageSynchronizer.destroy();
 
-    delete window.layoutManager;
+    delete OHIF.viewerbase.layoutManager;
     delete ProtocolEngine;
 });

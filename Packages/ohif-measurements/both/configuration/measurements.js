@@ -44,6 +44,12 @@ class MeasurementApi {
                         studyInstanceUids: measurement.studyInstanceUid
                     });
 
+                    // Preventing errors thrown when non-associated (standalone) study is opened...
+                    // @TODO: Make sure this logic is correct.
+                    if (!timepoint) {
+                        return;
+                    }
+
                     const emptyItem = groupCollection.findOne({
                         toolId: { $eq: null },
                         timepointId: timepoint.timepointId
@@ -195,7 +201,11 @@ class MeasurementApi {
 
                     measurements.forEach(measurement => {
                         delete measurement._id;
-                        this.tools[measurement.toolType].insert(measurement);
+                        // @TODO: check if this conditional is ok, because is throwing 
+                        // an error for temp measurements -> measurement.toolType is undefined
+                        if(measurement.toolType && this.tools[measurement.toolType]) {
+                            this.tools[measurement.toolType].insert(measurement);
+                        }
                     });
                 });
 

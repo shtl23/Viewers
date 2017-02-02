@@ -1,3 +1,13 @@
+import { Meteor } from 'meteor/meteor';
+import { Template } from 'meteor/templating';
+import { Session } from 'meteor/session';
+import { Random } from 'meteor/random';
+import { $ } from 'meteor/jquery';
+
+import { OHIF } from 'meteor/ohif:core';
+import { Viewerbase } from 'meteor/ohif:viewerbase';
+import 'meteor/ohif:viewerbase';
+
 /**
  * Updates the Hanging Protocol Select2 Input
  */
@@ -363,7 +373,7 @@ Template.protocolEditor.events({
             text: 'Are you sure you would like to remove this Protocol? This cannot be reversed.'
         };
 
-        showConfirmDialog(() => {
+        Viewerbase.dialogUtils.showConfirmDialog(() => {
             // Remove the Protocol
             HP.ProtocolStore.removeProtocol(selectedProtocol.id);
 

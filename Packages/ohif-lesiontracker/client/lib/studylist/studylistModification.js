@@ -1,4 +1,5 @@
 import { OHIF } from 'meteor/ohif:core';
+import { Viewerbase } from 'meteor/ohif:viewerbase';
 
 Meteor.startup(function() {
     StudyList.callbacks['dblClickOnStudy'] = dblClickOnStudy;
@@ -13,7 +14,7 @@ Meteor.startup(function() {
  */
 function dblClickOnStudy(data) {
     // Use the formatPN template helper to clean up the patient name
-    let title = formatPN(data.patientName);
+    let title = Viewerbase.helpers.formatPN(data.patientName);
 
     const instance = Template.instance();
 
@@ -41,18 +42,18 @@ function dblClickOnStudy(data) {
  * @param title The title to be used for the tab heading
  */
 function open(studyInstanceUid, title) {
-    const contentid = 'viewerTab';
+    const contentId = 'viewerTab';
 
     ViewerData = window.ViewerData || ViewerData;
 
     // Update the ViewerData global object
-    ViewerData[contentid] = {
+    ViewerData[contentId] = {
         title: title,
-        contentid: contentid,
+        contentId: contentId,
         isUnassociatedStudy: true,
         studyInstanceUids: [studyInstanceUid]
     };
 
     // Switch to the new tab
-    switchToTab(contentid);
+    switchToTab(contentId);
 }

@@ -1,24 +1,48 @@
+import { Meteor } from 'meteor/meteor';
+import { Session } from 'meteor/session';
+import { Template } from 'meteor/templating';
+import { ReactiveDict } from 'meteor/reactive-dict';
+
 import { OHIF } from 'meteor/ohif:core';
+import 'meteor/ohif:cornerstone';
+import 'meteor/ohif:viewerbase';
+import 'meteor/ohif:metadata';
 
-OHIF.viewer = OHIF.viewer || {};
-OHIF.viewer.defaultTool = 'wwwc';
-OHIF.viewer.refLinesEnabled = true;
-OHIF.viewer.cine = {
-    framesPerSecond: 24,
-    loop: true
-};
+Meteor.startup(() => {
+    Session.setDefault('activeViewport', false);
+    Session.setDefault('leftSidebar', false);
+    Session.setDefault('rightSidebar', false);
 
-OHIF.viewer.functionList = {
-    toggleCineDialog: toggleCineDialog,
-    toggleCinePlay: toggleCinePlay,
-    clearTools: clearTools,
-    resetViewport: resetViewport,
-    invert: invert
-};
+    OHIF.viewer = OHIF.viewer || {};
+    OHIF.viewer.defaultTool = 'wwwc';
+    OHIF.viewer.refLinesEnabled = true;
+    OHIF.viewer.cine = {
+        framesPerSecond: 24,
+        loop: true
+    };
 
-Session.setDefault('activeViewport', false);
-Session.setDefault('leftSidebar', false);
-Session.setDefault('rightSidebar', false);
+    const viewportUtils = OHIF.viewerbase.viewportUtils;
+
+    OHIF.viewer.functionList = {
+        toggleCineDialog: viewportUtils.toggleCineDialog,
+        toggleCinePlay: viewportUtils.toggleCinePlay,
+        clearTools: viewportUtils.clearTools,
+        resetViewport: viewportUtils.resetViewport,
+        invert: viewportUtils.invert
+    };
+
+    OHIF.viewer.stackImagePositionOffsetSynchronizer = new OHIF.viewerbase.StackImagePositionOffsetSynchronizer();
+    
+    // Create the synchronizer used to update reference lines
+    OHIF.viewer.updateImageSynchronizer = new cornerstoneTools.Synchronizer('CornerstoneNewImage', cornerstoneTools.updateImageSynchronizer);
+
+    OHIF.viewer.metadataProvider = OHIF.cornerstone.metadataProvider;
+
+    // Metadata configuration
+    const metadataProvider = OHIF.viewer.metadataProvider;
+    cornerstoneTools.metaData.addProvider(metadataProvider.provider.bind(metadataProvider));
+});
+
 
 Template.viewer.onCreated(() => {
     const instance = Template.instance();
@@ -46,14 +70,16 @@ Template.viewer.onCreated(() => {
 
     Session.set('activeViewport', ViewerData[contentId].activeViewport || 0);
 
-    // Update the ViewerStudies collection with the loaded studies
-    ViewerStudies.remove({});
+    // @TypeSafeStudies
+    // Update the OHIF.viewer.Studies collection with the loaded studies
+    OHIF.viewer.Studies.removeAll();
 
     ViewerData[contentId].studyInstanceUids = [];
     instance.data.studies.forEach(study => {
         study.selected = true;
-        study.displaySets = createStacks(study);
-        ViewerStudies.insert(study);
+        const studyMetadata = new OHIF.metadata.StudyMetadata(study);
+        study.displaySets = OHIF.viewerbase.sortingManager.getDisplaySets(studyMetadata);
+        OHIF.viewer.Studies.insert(study);
         ViewerData[contentId].studyInstanceUids.push(study.studyInstanceUid);
     });
 

@@ -1,6 +1,8 @@
-import { OHIF } from 'meteor/ohif:core';
 import { Template } from 'meteor/templating';
 import { $ } from 'meteor/jquery';
+
+import { OHIF } from 'meteor/ohif:core';
+import 'meteor/ohif:viewerbase';
 
 Template.toolbarSection.onCreated(() => {
     const instance = Template.instance();
@@ -181,7 +183,7 @@ Template.toolbarSection.helpers({
                 title: 'CINE',
                 classes: 'imageViewerCommand',
                 iconClasses: 'fa fa-youtube-play',
-                disableFunction: hasMultipleFrames
+                disableFunction: OHIF.viewerbase.viewportUtils.hasMultipleFrames
             });
         }
 
@@ -235,7 +237,7 @@ Template.toolbarSection.onRendered(function() {
     }
 
     // Set disabled/enabled tool buttons that are set in toolManager
-    const states = toolManager.getToolDefaultStates();
+    const states = OHIF.viewerbase.toolManager.getToolDefaultStates();
     const disabledToolButtons = states.disabledToolButtons;
     const allToolbarButtons = $('#toolbar').find('button');
     if (disabledToolButtons && disabledToolButtons.length > 0) {

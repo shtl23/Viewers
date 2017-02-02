@@ -1,6 +1,9 @@
 import { Template } from 'meteor/templating';
 import { ReactiveVar } from 'meteor/reactive-var';
 import { Session } from 'meteor/session';
+import { $ } from 'meteor/jquery';
+
+import { OHIF } from 'meteor/ohif:core';
 
 Template.studySeriesQuickSwitch.onCreated(() => {
     const instance = Template.instance();
@@ -10,7 +13,7 @@ Template.studySeriesQuickSwitch.onCreated(() => {
 
     // Gets the viewport data for the given viewport index
     instance.getViewportData = viewportIndex => {
-        const layoutManager = window.layoutManager;
+        const layoutManager = OHIF.viewerbase.layoutManager;
         return layoutManager && layoutManager.viewportData && layoutManager.viewportData[viewportIndex];
     };
 
@@ -25,13 +28,14 @@ Template.studySeriesQuickSwitch.onCreated(() => {
 
         const viewportData = instance.getViewportData(viewportIndex);
 
+        // @TypeSafeStudies
         if (viewportData) {
             // Finds the current study and return it
-            instance.study = ViewerStudies.findOne({
+            instance.study = OHIF.viewer.Studies.findBy({
                 studyInstanceUid: viewportData.studyInstanceUid
             });
         } else {
-            instance.study = ViewerStudies.findOne();
+            instance.study = OHIF.viewer.Studies.getElementByIndex(0);
         }
 
         if (!instance.study) {

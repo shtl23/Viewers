@@ -1,6 +1,13 @@
-import { OHIF } from 'meteor/ohif:core';
+import { $ } from 'meteor/jquery';
+import { Session } from 'meteor/session';
+import { ReactiveVar } from 'meteor/reactive-var';
+import { Template } from 'meteor/templating';
+import { Blaze } from 'meteor/blaze';
 
-var keys = {
+import { OHIF } from 'meteor/ohif:core';
+import { Viewerbase } from 'meteor/ohif:viewerbase';
+
+const keys = {
     ESC: 27
 };
 
@@ -18,7 +25,7 @@ function closeHandler(dialog) {
     $('.removableBackdrop').remove();
 
     // Restore the focus to the active viewport
-    setFocusToActiveViewport();
+    Viewerbase.setFocusToActiveViewport();
 }
 
 /**
@@ -128,23 +135,24 @@ function getActiveViewportImageId() {
 }
 
 function getAbstractPriorValue(imageId) {
-    var currentStudy = ViewerStudies.findOne({}, {
-        sort: {
-            studyDate: -1
-        },
-        limit: 1
+    // @TypeSafeStudies
+    // Retrieves the first study of the collection using the given sort order.
+    // Since we're only interrested in the first record, "null" will be used
+    // as search criteria (thus no actual search will be made).
+    const currentStudy = OHIF.viewer.Studies.findBy(null, {
+        sort: [ ['studyDate', 'desc'] ]
     });
 
     if (!currentStudy) {
         return;
     }
 
-    var priorStudy = cornerstoneTools.metaData.get('study', imageId);
+    const priorStudy = cornerstoneTools.metaData.get('study', imageId);
     if (!priorStudy) {
         return;
     }
 
-    var studies = StudyListStudies.find({
+    const studies = StudyListStudies.find({
         patientId: currentStudy.patientId,
         studyDate: {
             $lt: currentStudy.studyDate
@@ -155,7 +163,7 @@ function getAbstractPriorValue(imageId) {
         }
     });
 
-    var priorIndex = 0;
+    let priorIndex = 0;
 
     // TODO: Check what the abstract prior value should equal for an unrelated study?
     studies.forEach(function(study, index) {

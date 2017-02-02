@@ -14,7 +14,7 @@ Package.onUse(function(api) {
     api.use('random');
     api.use('templating');
     api.use('natestrauser:select2@4.0.1', 'client');
-    api.use('clinical:router');
+    api.use('iron:router@1.0.13');
     api.use('momentjs:moment');
     api.use('validatejs');
 
@@ -26,7 +26,6 @@ Package.onUse(function(api) {
     // Both client & server
     api.addFiles('both/namespace.js');
     api.addFiles('both/collections.js');
-    //api.addFiles('both/dicomTagDescriptions.js');
     api.addFiles('both/schema.js');
     api.addFiles('both/hardcodedData.js');
     api.addFiles('both/testData.js');
