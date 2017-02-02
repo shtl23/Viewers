@@ -35,8 +35,8 @@ Package.onUse(function(api) {
         bare: true
     });
 
-    api.addAssets('public/js/cornerstoneWADOImageLoaderCodecs.js', 'client');
-    api.addAssets('public/js/cornerstoneWADOImageLoaderWebWorker.js', 'client');
+    api.addAssets('public/js/cornerstoneWADOImageLoaderCodecs.es5.js', 'client');
+    api.addAssets('public/js/cornerstoneWADOImageLoaderWebWorker.es5.js', 'client');
 
     api.export('cornerstone', 'client');
     api.export('cornerstoneMath', 'client');
