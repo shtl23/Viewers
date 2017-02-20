@@ -1,4 +1,4 @@
-/*! cornerstone-wado-image-loader - v0.14.1 - 2017-02-11 | (c) 2016 Chris Hafey | https://github.com/chafey/cornerstoneWADOImageLoader */
+/*! cornerstone-wado-image-loader - v0.14.1 - 2017-02-22 | (c) 2016 Chris Hafey | https://github.com/chafey/cornerstoneWADOImageLoader */
 //
 // This is a cornerstone image loader for WADO-URI requests.
 //
@@ -323,7 +323,7 @@ if(typeof cornerstoneWADOImageLoader === 'undefined'){
     }
     else if(imageFrame.photometricInterpretation === "YBR_FULL" )
     {
-      convertYBRFull(imageFrame, rgbaBuffer);
+      convertRGB(imageFrame, rgbaBuffer);
     }
     else
     {
@@ -349,12 +349,7 @@ if(typeof cornerstoneWADOImageLoader === 'undefined'){
     // special case for XA and XRF
     // https://groups.google.com/forum/#!searchin/comp.protocols.dicom/Modality$20LUT$20XA/comp.protocols.dicom/UBxhOZ2anJ0/D0R_QP8V2wIJ
     return  sopClassUid !== '1.2.840.10008.5.1.4.1.1.12.1' && // XA
-      sopClassUid !== '1.2.840.10008.5.1.4.1.1.12.2.1	'; // XRF
-  }
-
-  function getSizeInBytes(imageFrame) {
-    var bytesPerPixel = Math.round(imageFrame.bitsAllocated / 8);
-    return imageFrame.rows * imageFrame.columns * bytesPerPixel * imageFrame.samplesPerPixel;
+      sopClassUid !== '1.2.840.10008.5.1.4.1.1.12.2.1 '; // XRF
   }
 
   /**
@@ -378,18 +373,38 @@ if(typeof cornerstoneWADOImageLoader === 'undefined'){
     var deferred = $.Deferred();
     var imageFrame = cornerstoneWADOImageLoader.getImageFrame(imageId);
     var decodePromise = cornerstoneWADOImageLoader.decodeImageFrame(imageFrame, transferSyntax, pixelData, canvas, options);
-    decodePromise.then(function(imageFrame) {
-      setPixelDataType(imageFrame);
 
+    decodePromise.then(function(imageFrame) {      
       //var imagePixelModule = metaDataProvider('imagePixelModule', imageId);
       var imagePlaneModule = cornerstone.metaData.get('imagePlaneModule', imageId);
       var voiLutModule = cornerstone.metaData.get('voiLutModule', imageId);
       var modalityLutModule = cornerstone.metaData.get('modalityLutModule', imageId);
       var sopCommonModule = cornerstone.metaData.get('sopCommonModule', imageId);
+      var isColorImage = cornerstoneWADOImageLoader.isColorImage(imageFrame.photometricInterpretation);
+      var isJPEGBaseline8Bits = (transferSyntax === "1.2.840.10008.1.2.4.50") && (imageFrame.bitsAllocated === 8);
+
+      // JPEGBaseline (8 bits) is already returning the pixel data in the right format (rgba)
+      // because it's using a canvas to load and decode the image.
+      if(!isJPEGBaseline8Bits) {
+        setPixelDataType(imageFrame);
+
+        // convert color space
+        if(isColorImage) {
+          // setup the canvas context
+          canvas.height = imageFrame.rows;
+          canvas.width = imageFrame.columns;
+
+          var context = canvas.getContext('2d');
+          var imageData = context.createImageData(imageFrame.columns, imageFrame.rows);
+          cornerstoneWADOImageLoader.convertColorSpace(imageFrame, imageData);
+          imageFrame.imageData = imageData;
+          imageFrame.pixelData = imageData.data;
+        }
+      }
 
       var image = {
         imageId: imageId,
-        color: cornerstoneWADOImageLoader.isColorImage(imageFrame.photometricInterpretation),
+        color: isColorImage,
         columnPixelSpacing: imagePlaneModule.pixelSpacing ? imagePlaneModule.pixelSpacing[1] : undefined,
         columns: imageFrame.columns,
         height: imageFrame.rows,
@@ -400,7 +415,7 @@ if(typeof cornerstoneWADOImageLoader === 'undefined'){
         render: undefined, // set below
         rowPixelSpacing: imagePlaneModule.pixelSpacing ? imagePlaneModule.pixelSpacing[0] : undefined,
         rows: imageFrame.rows,
-        sizeInBytes: getSizeInBytes(imageFrame),
+        sizeInBytes: imageFrame.pixelData.length,
         slope: modalityLutModule.rescaleSlope ? modalityLutModule.rescaleSlope: 1,
         width: imageFrame.columns,
         windowCenter: voiLutModule.windowCenter ? voiLutModule.windowCenter[0] : undefined,
@@ -409,24 +424,10 @@ if(typeof cornerstoneWADOImageLoader === 'undefined'){
         webWorkerTimeInMS: imageFrame.webWorkerTimeInMS
       };
 
-
       // add function to return pixel data
       image.getPixelData = function() {
         return imageFrame.pixelData;
       };
-
-      // convert color space
-      if(image.color) {
-        // setup the canvas context
-        canvas.height = imageFrame.rows;
-        canvas.width = imageFrame.columns;
-
-        var context = canvas.getContext('2d');
-        var imageData = context.createImageData(imageFrame.columns, imageFrame.rows);
-        cornerstoneWADOImageLoader.convertColorSpace(imageFrame, imageData);
-        imageFrame.imageData = imageData;
-        imageFrame.pixelData = imageData.data;
-      }
 
       // Setup the renderer
       if(image.color) {
@@ -536,7 +537,7 @@ if(typeof cornerstoneWADOImageLoader === 'undefined'){
     {
       if(imageFrame.bitsAllocated === 8)
       {
-        return cornerstoneWADOImageLoader.decodeJPEGBaseline8Bit(imageFrame, canvas);
+        return cornerstoneWADOImageLoader.decodeJPEGBaseline8Bit(imageFrame, pixelData, canvas);
       } else {
         return addDecodeTask(imageFrame, transferSyntax, pixelData, options);
       }
@@ -625,11 +626,11 @@ if(typeof cornerstoneWADOImageLoader === 'undefined'){
     }
   }
 
-  function decodeJPEGBaseline8Bit(imageFrame, canvas) {
+  function decodeJPEGBaseline8Bit(imageFrame, pixelData, canvas) {
     var start = new Date().getTime();
     var deferred = $.Deferred();
 
-    var imgBlob = new Blob([imageFrame.pixelData], {type: "image/jpeg"});
+    var imgBlob = new Blob([pixelData], {type: "image/jpeg"});
 
     var r = new FileReader();
     if(r.readAsBinaryString === undefined) {
@@ -871,7 +872,7 @@ if(typeof cornerstoneWADOImageLoader === 'undefined'){
       var response = new Uint8Array(imageFrameAsArrayBuffer);
 
       // First look for the multipart mime header
-      var tokenIndex = cornerstoneWADOImageLoader.wadors.findIndexOfString(response, '\n\r\n');
+      var tokenIndex = cornerstoneWADOImageLoader.wadors.findIndexOfString(response, '\r\n\r\n');
       if(tokenIndex === -1) {
         deferred.reject('invalid response - no multipart mime header');
       }
@@ -882,18 +883,23 @@ if(typeof cornerstoneWADOImageLoader === 'undefined'){
       if(!boundary) {
         deferred.reject('invalid response - no boundary marker')
       }
-      var offset = tokenIndex + 3; // skip over the \n\r\n
+      var offset = tokenIndex + 4; // skip over the \r\n\r\n
 
       // find the terminal boundary marker
       var endIndex = cornerstoneWADOImageLoader.wadors.findIndexOfString(response, boundary, offset);
       if(endIndex === -1) {
         deferred.reject('invalid response - terminating boundary not found');
       }
+
+      // Remove \r\n from the length
+      var length = endIndex - offset - 2;
+
       // return the info for this pixel data
-      var length = endIndex - offset;
       deferred.resolve({
         contentType: findContentType(split),
-        imageFrame: new Uint8Array(imageFrameAsArrayBuffer, offset, length)
+        imageFrame: {
+          pixelData: new Uint8Array(imageFrameAsArrayBuffer, offset, length)
+        }
       });
     });
     return deferred.promise();    
@@ -925,7 +931,7 @@ if(typeof cornerstoneWADOImageLoader === 'undefined'){
 
     // TODO: load bulk data items that we might need
 
-    var mediaType;// = 'image/dicom+jp2';
+    var mediaType = 'multipart/related; type=application/octet-stream'; // 'image/dicom+jp2';
 
     // get the pixel data from the server
     cornerstoneWADOImageLoader.wadors.getPixelData(uri, imageId, mediaType).then(function(result) {
@@ -1096,8 +1102,13 @@ if(typeof cornerstoneWADOImageLoader === 'undefined'){
         planarConfiguration: getValue(metaData['00280006']),
         pixelAspectRatio: getValue(metaData['00280034']),
         smallestPixelValue: getValue(metaData['00280106']),
-        largestPixelValue: getValue(metaData['00280107'])
-        // TODO Color Palette
+        largestPixelValue: getValue(metaData['00280107']),
+        redPaletteColorLookupTableDescriptor: getNumberValues(metaData['00281101']),
+        greenPaletteColorLookupTableDescriptor: getNumberValues(metaData['00281102']),
+        bluePaletteColorLookupTableDescriptor: getNumberValues(metaData['00281103']),
+        redPaletteColorLookupTableData: getNumberValues(metaData['00281201']),
+        greenPaletteColorLookupTableData: getNumberValues(metaData['00281202']),
+        bluePaletteColorLookupTableData: getNumberValues(metaData['00281203'])
       };
     }
 
@@ -1220,7 +1231,6 @@ if(typeof cornerstoneWADOImageLoader === 'undefined'){
 
     // This uri is not loaded or being loaded, load it via an xhrRequest
     var promise = loadRequest(uri);
-    promises[uri] = promise;
 
     // handle success and failure of the XHR request load
     var loadDeferred = $.Deferred();
@@ -1240,6 +1250,8 @@ if(typeof cornerstoneWADOImageLoader === 'undefined'){
         // error thrown, remove the promise
         delete promises[uri];
       });
+
+    promises[uri] = loadDeferred;
     return loadDeferred;
   }
 
